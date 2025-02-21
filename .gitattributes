@@ -1,0 +1,2 @@
+examples/NonCartesianGrappa/data/meas_MID00267_FID21023_Spiral_p2_proc.h5 filter=lfs diff=lfs merge=lfs -text
+examples/NonCartesianGrappa/data/recon.h5 filter=lfs diff=lfs merge=lfs -text
