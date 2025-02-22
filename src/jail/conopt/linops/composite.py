@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Optional, Union
 
 import torch
 
@@ -13,6 +13,7 @@ class ConcatOperator(LinearOperator):
     def __init__(
         self,
         operators: List[Union[torch.Tensor, LinearOperator]],
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the ConcatOperator.
@@ -23,6 +24,7 @@ class ConcatOperator(LinearOperator):
             List of linear operators to concatenate.
         """
         self.dtype = torch.float32
+        self.device = device
         self.operators = operators
 
         # Initialize the shape of the concatenated operator
@@ -63,7 +65,7 @@ class ConcatOperator(LinearOperator):
         torch.Tensor
             The result of the matrix-vector multiplication.
         """
-        y = torch.zeros(self.shape[0], dtype=self.dtype)
+        y = torch.zeros(self.shape[0], dtype=self.dtype, device=self.device)
 
         # Apply each operator to the corresponding part of x
         for index, operator in zip(self.indices, self.operators):
@@ -88,7 +90,7 @@ class ConcatOperator(LinearOperator):
         torch.Tensor
             The result of the adjoint matrix-vector multiplication.
         """
-        y = torch.zeros(self.shape[1], dtype=self.dtype)
+        y = torch.zeros(self.shape[1], dtype=self.dtype, device=self.device)
 
         # Apply the adjoint of each operator to the corresponding part of x
         for index, operator in zip(self.indices, self.operators):
@@ -105,6 +107,7 @@ class SumOperator(LinearOperator):
     def __init__(
         self,
         operators: List[Union[torch.Tensor, LinearOperator]],
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the SumOperator.
@@ -115,6 +118,7 @@ class SumOperator(LinearOperator):
             List of linear operators to sum.
         """
         self.dtype = torch.float32
+        self.device = device
         self.operators = operators
 
         # Ensure all operators have the same shape
@@ -140,7 +144,7 @@ class SumOperator(LinearOperator):
         torch.Tensor
             The result of the matrix-vector multiplication.
         """
-        y = torch.zeros(self.shape[0], dtype=self.dtype)
+        y = torch.zeros(self.shape[0], dtype=self.dtype, device=self.device)
 
         # Apply each operator and sum the results
         for operator in self.operators:
@@ -165,7 +169,7 @@ class SumOperator(LinearOperator):
         torch.Tensor
             The result of the adjoint matrix-vector multiplication.
         """
-        y = torch.zeros(self.shape[1], dtype=self.dtype)
+        y = torch.zeros(self.shape[1], dtype=self.dtype, device=self.device)
 
         # Apply the adjoint of each operator and sum the results
         for operator in self.operators:

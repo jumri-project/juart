@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 
@@ -13,6 +13,7 @@ class IdentityOperator(LinearOperator):
     def __init__(
         self,
         input_shape: Tuple[int, ...],
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the IdentityOperator.
@@ -33,6 +34,7 @@ class IdentityOperator(LinearOperator):
         # Set the data types
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,

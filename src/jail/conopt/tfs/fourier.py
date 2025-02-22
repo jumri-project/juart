@@ -51,7 +51,10 @@ def nonuniform_transfer_function(
     norm = 1 / torch.prod(torch.tensor(oversampling, dtype=torch.float32))
 
     # Create normalized input array (PyTorch tensor)
-    x = torch.ones((1, 1, 1, nK, nS, nTI, nTE), dtype=torch.complex64) / norm
+    x = (
+        torch.ones((1, 1, 1, nK, nS, nTI, nTE), dtype=torch.complex64, device=k.device)
+        / norm
+    )
 
     # Compute the Point-Spread Function (PSF) using the non-uniform adjoint Fourier
     # transform

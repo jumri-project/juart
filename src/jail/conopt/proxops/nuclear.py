@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import torch
 from torch import jit
@@ -8,6 +8,9 @@ from torch import jit
 def singular_value_soft_thresholding_kernel(
     x: torch.Tensor,
     lamda: float,
+    chunk_size: int = 16384,
+    epsilon: float = 1e-9,
+    driver: Union[str, None] = "gesvda",
 ) -> torch.Tensor:
     """
     Singular value soft thresholding kernel using PyTorch.
@@ -24,13 +27,24 @@ def singular_value_soft_thresholding_kernel(
         Threshold parameter for soft thresholding of singular values.
     """
 
+    if x.device == "cpu":
+        driver = None
+
     shape = x.shape
     x = x.reshape(-1, x.shape[-2], x.shape[-1])
 
-    for index in range(x.shape[0]):
-        U, S, V = torch.linalg.svd(x[index, :, :], full_matrices=False)
+    x = x + torch.randn(x.shape, dtype=x.dtype, device=x.device) * epsilon
+
+    num_chunks = (x.shape[0] + chunk_size - 1) // chunk_size
+
+    for i in range(num_chunks):
+        x_chunk = x[i * chunk_size : (i + 1) * chunk_size, :, :]
+
+        U, S, V = torch.linalg.svd(x_chunk, full_matrices=False, driver=driver)
         S_thresh = torch.clamp(S - lamda, min=0)
-        x[index, :, :] = torch.matmul(U * S_thresh.unsqueeze(-2), V)
+        x_chunk = torch.matmul(U * S_thresh.unsqueeze(-2), V)
+
+        x[i * chunk_size : (i + 1) * chunk_size, :, :] = x_chunk
 
     x = x.reshape(shape)
 

@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 
@@ -23,6 +23,7 @@ class WaveletTransformOperator(LinearOperator):
         wavelet: str = "db2",
         level: int = 4,
         axes: Tuple[int, ...] = (0, 1),
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the WaveletTransformOperator.
@@ -43,12 +44,20 @@ class WaveletTransformOperator(LinearOperator):
         nD = (3 * level) + 1
 
         # Calculate wavelet transfer functions for the axes
-        Hx, Gx = wavelet_transfer_functions(wavelet, level, input_shape[axes[0]])
-        Hy, Gy = wavelet_transfer_functions(wavelet, level, input_shape[axes[1]])
+        Hx, Gx = wavelet_transfer_functions(
+            wavelet, level, input_shape[axes[0]], device=device
+        )
+        Hy, Gy = wavelet_transfer_functions(
+            wavelet, level, input_shape[axes[1]], device=device
+        )
 
         # Combine the transfer functions for the specified axes
         self.F = wavelet_transfer_functions_nd(
-            (Hx, Hy), (Gx, Gy), (nD,) + input_shape, axes
+            (Hx, Hy),
+            (Gx, Gy),
+            (nD,) + input_shape,
+            axes,
+            device=device,
         )
 
         self.axes = axes
@@ -64,6 +73,7 @@ class WaveletTransformOperator(LinearOperator):
         # Set the data types
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,
