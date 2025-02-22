@@ -37,6 +37,7 @@ class MIRAGE(object):
         inner_iter: int = 5,
         outer_iter: int = 500,
         callback: Optional[Callable] = None,
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the MIRAGE solver for QRAGE, a model-based iterative
@@ -120,21 +121,33 @@ class MIRAGE(object):
 
         # Define the channel operator
         channel_operator = ChannelOperator(
-            coil_sensitivities, shape, normalize=channel_normalize
+            coil_sensitivities,
+            shape,
+            normalize=channel_normalize,
+            device=device,
         )
 
         # Define the oversampled transfer function normal operator
         transfer_function_operator = OversampledTransferFunctionNormalOperator(
-            transfer_function, (nC, nX, nY, nZ, nS, nTI, nTE), nonuniform_axes=(1, 2)
+            transfer_function,
+            (nC, nX, nY, nZ, nS, nTI, nTE),
+            nonuniform_axes=(1, 2),
+            device=device,
         )
 
         if lambda_wavelet is not None:
             # Define the wavelet transform operator
             wavelet_operator = WaveletTransformOperator(
-                shape, axes=(0, 1), wavelet=wavelet_type, level=wavelet_level
+                shape,
+                axes=(0, 1),
+                wavelet=wavelet_type,
+                level=wavelet_level,
+                device=device,
             )
             lin_ops.append(-weight_wavelet * wavelet_operator)
-            lin_ops_normal.append(weight_wavelet**2 * IdentityOperator(shape))
+            lin_ops_normal.append(
+                weight_wavelet**2 * IdentityOperator(shape, device=device)
+            )
             prox_ops.append(
                 JointSoftThresholdingOperator(
                     wavelet_operator.adjoint_shape,
@@ -145,9 +158,11 @@ class MIRAGE(object):
 
         if lambda_hankel is not None:
             # Define the Block Hankel operator
-            hankel_operator = BlockHankelOperator(shape)
+            hankel_operator = BlockHankelOperator(shape, device=device)
             lin_ops.append(-weight_hankel * hankel_operator)
-            lin_ops_normal.append(weight_hankel**2 * BlockHankelNormalOperator(shape))
+            lin_ops_normal.append(
+                weight_hankel**2 * BlockHankelNormalOperator(shape, device=device)
+            )
             prox_ops.append(
                 SingularValueSoftThresholdingOperator(
                     hankel_operator.adjoint_shape, weight_hankel * lambda_hankel
@@ -156,9 +171,13 @@ class MIRAGE(object):
 
         if lambda_casorati is not None:
             # Define the shift (Casorati) operator
-            casorati_operator = ShiftOperator(casorati_window, (1, 1), (0, 1), shape)
+            casorati_operator = ShiftOperator(
+                casorati_window, (1, 1), (0, 1), shape, device=device
+            )
             lin_ops.append(-weight_casorati * casorati_operator)
-            lin_ops_normal.append(weight_casorati**2 * IdentityOperator(shape))
+            lin_ops_normal.append(
+                weight_casorati**2 * IdentityOperator(shape, device=device)
+            )
             prox_ops.append(
                 SingularValueSoftThresholdingOperator(
                     casorati_operator.adjoint_shape,
@@ -169,13 +188,14 @@ class MIRAGE(object):
             )
 
         # Define the composite operators
-        self.concatenated_operator = ConcatOperator(lin_ops)
+        self.concatenated_operator = ConcatOperator(lin_ops, device=device)
         self.identity_operator = IdentityOperator(
-            self.concatenated_operator.shape[0] // 2
+            self.concatenated_operator.shape[0] // 2,
+            device=device,
         )
-        self.constant = torch.tensor(0.0, dtype=torch.float32)
+        self.constant = torch.tensor(0.0, dtype=torch.float32, device=device)
 
-        self.concatenated_normal_operator = SumOperator(lin_ops_normal)
+        self.concatenated_normal_operator = SumOperator(lin_ops_normal, device=device)
 
         # Define the proximal operators
         prox_f = SeparableProximalOperator(
@@ -201,6 +221,7 @@ class MIRAGE(object):
             verbose=True,
             callback=callback,
             tau=tau,
+            device=device,
         )
 
     def solve(self) -> torch.Tensor:

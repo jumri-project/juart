@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 
@@ -17,6 +17,7 @@ class TransferFunctionNormalOperator(LinearOperator):
         transfer_function: torch.Tensor,
         input_shape: Tuple[int, ...],
         axes: Tuple[int, ...] = (1, 2),
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the OversampledTransferFunctionNormalOperator.
@@ -42,11 +43,12 @@ class TransferFunctionNormalOperator(LinearOperator):
             2 * torch.prod(torch.tensor(self.forward_shape)),
         )
 
-        self.transfer_function = transfer_function
+        self.transfer_function = transfer_function.to(device)
 
         # Set the data types
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,
@@ -110,6 +112,7 @@ class OversampledTransferFunctionNormalOperator(LinearOperator):
         transfer_function: torch.Tensor,
         input_shape: Tuple[int, ...],
         nonuniform_axes: Tuple[int, ...] = (1, 2),
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the OversampledTransferFunctionNormalOperator.
@@ -135,11 +138,12 @@ class OversampledTransferFunctionNormalOperator(LinearOperator):
             2 * torch.prod(torch.tensor(self.forward_shape)),
         )
 
-        self.transfer_function = transfer_function
+        self.transfer_function = transfer_function.to(device)
 
         # Set the data types
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,

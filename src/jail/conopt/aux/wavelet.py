@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 
@@ -6,7 +6,9 @@ from .fourier import fourier_transform_adjoint, fourier_transform_forward
 
 
 def wavelet_filters(
-    wavelet: str, dtype=torch.float32
+    wavelet: str,
+    dtype: torch.dtype = torch.float32,
+    device: Optional[torch.device] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Returns the scaling filter h and wavelet filter g for the specified wavelet.
@@ -25,13 +27,16 @@ def wavelet_filters(
         g : Wavelet filter coefficients.
     """
     if wavelet == "db1":
-        h = torch.tensor([1, 1], dtype=dtype)
+        h = torch.tensor([1, 1], dtype=dtype, device=device)
     elif wavelet == "db2":
-        h = torch.tensor([0.6830127, 1.1830127, 0.3169873, -0.1830127], dtype=dtype)
+        h = torch.tensor(
+            [0.6830127, 1.1830127, 0.3169873, -0.1830127], dtype=dtype, device=device
+        )
     elif wavelet == "db3":
         h = torch.tensor(
             [0.47046721, 1.14111692, 0.650365, -0.19093442, -0.12083221, 0.0498175],
             dtype=dtype,
+            device=device,
         )
     elif wavelet == "db4":
         h = torch.tensor(
@@ -46,20 +51,27 @@ def wavelet_filters(
                 -0.01498699,
             ],
             dtype=dtype,
+            device=device,
         )
     else:
         raise ValueError(f"Unsupported wavelet type: {wavelet}")
 
     # Compute g (wavelet filter)
-    g = torch.flip(h, dims=[0]) * (-1) ** torch.arange(h.size(0), dtype=dtype)
+    g = torch.flip(h, dims=[0]) * (-1) ** torch.arange(
+        h.size(0), dtype=dtype, device=device
+    )
 
-    sqrt2 = torch.sqrt(torch.tensor(2.0, dtype=dtype))
+    sqrt2 = torch.sqrt(torch.tensor(2.0, dtype=dtype, device=device))
 
     return h / sqrt2, g / sqrt2
 
 
 def wavelet_transfer_functions(
-    wavelet: str, levels: int, length: int, dtype=torch.complex64
+    wavelet: str,
+    levels: int,
+    length: int,
+    dtype: torch.dtype = torch.complex64,
+    device: Optional[torch.device] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Computes the wavelet transfer functions Hc and Gc for the given wavelet, levels, and
@@ -82,10 +94,10 @@ def wavelet_transfer_functions(
         Hc : Scaling transfer functions of shape (length, levels).
         Gc : Wavelet transfer functions of shape (length, levels).
     """
-    h, g = wavelet_filters(wavelet)
+    h, g = wavelet_filters(wavelet, device=device)
 
-    H = torch.zeros((levels, length), dtype=dtype)
-    G = torch.zeros((levels, length), dtype=dtype)
+    H = torch.zeros((levels, length), dtype=dtype, device=device)
+    G = torch.zeros((levels, length), dtype=dtype, device=device)
 
     indices = h.size(0)
 
@@ -98,18 +110,18 @@ def wavelet_transfer_functions(
     H = torch.fft.fftshift(H, dim=1)
     G = torch.fft.fftshift(G, dim=1)
 
-    sqrt_length = torch.sqrt(torch.tensor(length, dtype=dtype))
-    sqrt2 = torch.sqrt(torch.tensor(2.0, dtype=dtype))
+    sqrt_length = torch.sqrt(torch.tensor(length, dtype=dtype, device=device))
+    sqrt2 = torch.sqrt(torch.tensor(2.0, dtype=dtype, device=device))
 
     H = fourier_transform_forward(H, axes=(1,)) * sqrt_length / sqrt2
     G = fourier_transform_forward(G, axes=(1,)) * sqrt_length / sqrt2
 
-    Hc = torch.zeros((levels, length), dtype=dtype)
-    Gc = torch.zeros((levels, length), dtype=dtype)
+    Hc = torch.zeros((levels, length), dtype=dtype, device=device)
+    Gc = torch.zeros((levels, length), dtype=dtype, device=device)
 
     for level in range(levels):
         if level == 0:
-            prod_H = torch.ones(length, dtype=dtype)
+            prod_H = torch.ones(length, dtype=dtype, device=device)
         else:
             prod_H = torch.prod(H[:level, :], dim=0)
         Hc[level, :] = prod_H * H[level, :]
@@ -123,6 +135,7 @@ def wavelet_transfer_functions_nd(
     G: List[torch.Tensor],
     shape: Tuple[int, ...],
     axes: Tuple[int, ...],
+    device: Optional[torch.device] = None,
 ) -> List[torch.Tensor]:
     """
     Constructs the wavelet transfer functions F for multidimensional data.
@@ -161,7 +174,7 @@ def wavelet_transfer_functions_nd(
         Fy = Fy.unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1)
         Fy = torch.movedim(Fy, 0, axes[1])
 
-        F = [Fx, Fy]
+        F = [Fx.to(device), Fy.to(device)]
 
     elif len(axes) == 3:
         Hx, Hy, Hz = H[0], H[1], H[2]
@@ -185,7 +198,7 @@ def wavelet_transfer_functions_nd(
         Fz = Fz.unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1)
         Fz = torch.movedim(Fz, 0, axes[2])
 
-        F = [Fx, Fy, Fz]
+        F = [Fx.to(device), Fy.to(device), Fz.to(device)]
 
     else:
         raise ValueError(

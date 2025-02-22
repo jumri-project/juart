@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 
@@ -21,6 +21,7 @@ class BlockHankelOperator(LinearOperator):
         self,
         input_shape: Tuple[int, ...],
         normalize: bool = True,
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the BlockHankelOperator.
@@ -48,6 +49,7 @@ class BlockHankelOperator(LinearOperator):
         # Set the data type to float32
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,
@@ -109,6 +111,7 @@ class BlockHankelNormalOperator(LinearOperator):
         self,
         input_shape: Tuple[int, ...],
         normalize: bool = True,
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the BlockHankelNormalOperator.
@@ -126,6 +129,7 @@ class BlockHankelNormalOperator(LinearOperator):
         # Set the data type to float32
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
         self.forward_shape = (nX, nY, nZ, nS, nT1, nT2)
         self.adjoint_shape = (nX, nY, nZ, nS, nT1, nT2)
@@ -137,7 +141,9 @@ class BlockHankelNormalOperator(LinearOperator):
 
         # Create diagonal normalization using block Hankel normal operator
         self.diagonal_normalization = block_hankel_normal(
-            torch.ones(input_shape, dtype=self.internal_dtype), input_shape, normalize
+            torch.ones(input_shape, dtype=self.internal_dtype, device=self.device),
+            input_shape,
+            normalize,
         )
 
     def _matvec(

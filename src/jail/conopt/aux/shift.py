@@ -30,8 +30,10 @@ def shift_forward(
     """
 
     # Convert shift parameters to tensors
-    shift_number = torch.tensor(shift_number, dtype=torch.int)
-    shift_size = torch.tensor(shift_size, dtype=torch.int)
+    shift_number = torch.tensor(
+        shift_number, dtype=torch.int, device=input_tensor.device
+    )
+    shift_size = torch.tensor(shift_size, dtype=torch.int, device=input_tensor.device)
 
     # Total number of shifts
     N = torch.prod(shift_number)
@@ -46,7 +48,8 @@ def shift_forward(
             torch.unravel_index(
                 torch.tensor(index),
                 shift_number.tolist(),
-            )
+            ),
+            device=input_tensor.device,
         )
         output_tensor[index, ...] = torch.roll(
             output_tensor[index, ...],
@@ -89,8 +92,10 @@ def shift_adjoint(
     """
 
     # Convert shift parameters to tensors
-    shift_number = torch.tensor(shift_number, dtype=torch.int)
-    shift_size = torch.tensor(shift_size, dtype=torch.int)
+    shift_number = torch.tensor(
+        shift_number, dtype=torch.int, device=input_tensor.device
+    )
+    shift_size = torch.tensor(shift_size, dtype=torch.int, device=input_tensor.device)
 
     # Total number of shifts
     N = torch.prod(shift_number)
@@ -105,7 +110,8 @@ def shift_adjoint(
             torch.unravel_index(
                 torch.tensor(index),
                 shift_number.tolist(),
-            )
+            ),
+            device=input_tensor.device,
         )
         output_tensor[index, ...] = torch.roll(
             output_tensor[index, ...],

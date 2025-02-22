@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 
@@ -23,6 +23,7 @@ class SystemMatrixOperator(LinearOperator):
         input_shape: Tuple[int, ...],
         window: Tuple[int, ...],
         axes: Tuple[int, ...] = (1, 2, 3),
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the SystemMatrixOperator.
@@ -59,6 +60,7 @@ class SystemMatrixOperator(LinearOperator):
         # Set the data types
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,
@@ -125,6 +127,7 @@ class SystemMatrixNormalOperator(LinearOperator):
         input_shape: Tuple[int, ...],
         window: Tuple[int, ...],
         axes: Tuple[int, ...] = (1, 2, 3),
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the SystemMatrixNormalOperator.
@@ -156,7 +159,9 @@ class SystemMatrixNormalOperator(LinearOperator):
 
         # Create the diagonal for the normal system matrix operation
         self.diagonal = system_matrix_normal(
-            torch.ones(input_shape, dtype=torch.complex64), input_shape, window
+            torch.ones(input_shape, dtype=torch.complex64, device=device),
+            input_shape,
+            window,
         )
 
         self.axes = axes
@@ -164,6 +169,7 @@ class SystemMatrixNormalOperator(LinearOperator):
         # Set the data types
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,

@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 
@@ -17,6 +17,7 @@ class ShiftOperator(LinearOperator):
         shift_size: Tuple[int, ...],
         axes: Tuple[int, ...],
         input_shape: Tuple[int, ...],
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the ShiftOperator.
@@ -50,6 +51,7 @@ class ShiftOperator(LinearOperator):
         # Set the data type to float32
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,

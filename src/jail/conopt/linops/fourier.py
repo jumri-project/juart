@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 
@@ -22,6 +22,7 @@ class FourierTransformOperator(LinearOperator):
         self,
         input_shape: Tuple[int, ...],
         axes: Tuple[int, ...],
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the FourierTransformOperator.
@@ -44,6 +45,7 @@ class FourierTransformOperator(LinearOperator):
         # Set the data type to float32 and internal dtype to complex64
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,
@@ -101,6 +103,7 @@ class NonuniformFourierTransformOperator(LinearOperator):
         self,
         k: torch.Tensor,
         input_shape: Tuple[int, ...],
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the NonuniformFourierTransformOperator.
@@ -128,6 +131,7 @@ class NonuniformFourierTransformOperator(LinearOperator):
         # Set the data type to float32 and internal dtype to complex64
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,
@@ -191,6 +195,7 @@ class NonuniformFourierTransformNormalOperator(LinearOperator):
         input_shape: Tuple[int, ...],
         oversampling: Tuple[int, ...] = (2, 2),
         nonuniform_axes: Tuple[int, ...] = (1, 2),
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the NonuniformFourierTransformNormalOperator.
@@ -219,7 +224,7 @@ class NonuniformFourierTransformNormalOperator(LinearOperator):
             k,
             (nX, nY, nZ, nS, nTI, nTE, nK),
             oversampling=oversampling,
-        )
+        ).to(device)
         self.nonuniform_axes = nonuniform_axes
 
         self.shape = (
@@ -230,6 +235,7 @@ class NonuniformFourierTransformNormalOperator(LinearOperator):
         # Set the data type to float32 and internal dtype to complex64
         self.dtype = torch.float32
         self.internal_dtype = torch.complex64
+        self.device = device
 
     def _matvec(
         self,

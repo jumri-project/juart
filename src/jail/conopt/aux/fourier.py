@@ -84,14 +84,14 @@ def nufft2d_type1(
         Fourier transformed data on a uniform grid.
     """
     y = finufft.nufft2d1(
-        k[0, :].numpy(),
-        k[1, :].numpy(),
-        x.numpy(),
+        k[0, :].cpu().numpy(),
+        k[1, :].cpu().numpy(),
+        x.cpu().numpy(),
         n_modes=n_modes,
         eps=eps,
         nthreads=nthreads,
     )
-    return torch.tensor(y, dtype=torch.complex64)
+    return torch.tensor(y, dtype=x.dtype, device=x.device)
 
 
 def nufft2d_type2(
@@ -123,13 +123,13 @@ def nufft2d_type2(
         The inverse NUFFT result at non-uniform points.
     """
     y = finufft.nufft2d2(
-        k[0, :].numpy(),
-        k[1, :].numpy(),
-        x.numpy(),
+        k[0, :].cpu().numpy(),
+        k[1, :].cpu().numpy(),
+        x.cpu().numpy(),
         eps=eps,
         nthreads=nthreads,
     )
-    return torch.tensor(y, dtype=torch.complex64)
+    return torch.tensor(y, dtype=x.dtype, device=x.device)
 
 
 def nonuniform_fourier_transform_forward(
@@ -165,7 +165,7 @@ def nonuniform_fourier_transform_forward(
 
     k = 2 * torch.pi * k.to(torch.float32)
     x = x.to(torch.complex64)
-    y = torch.zeros(shape, dtype=torch.complex64)
+    y = torch.zeros(shape, dtype=x.dtype, device=x.device)
 
     for S, TI, TE in torch.cartesian_prod(
         torch.arange(shape[-3]), torch.arange(shape[-2]), torch.arange(shape[-1])
@@ -214,7 +214,7 @@ def nonuniform_fourier_transform_adjoint(
 
     k = 2 * torch.pi * k.to(torch.float32)
     x = x.to(torch.complex64)
-    y = torch.zeros(shape, dtype=torch.complex64)
+    y = torch.zeros(shape, dtype=x.dtype, device=x.device)
 
     for S, TI, TE in torch.cartesian_prod(
         torch.arange(shape[-3]), torch.arange(shape[-2]), torch.arange(shape[-1])

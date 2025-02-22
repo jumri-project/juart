@@ -39,7 +39,7 @@ class ADMM:
             "Relative Residual",
             "Tau",
         ),
-        device: str = "cpu",
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize the ADMM solver.
