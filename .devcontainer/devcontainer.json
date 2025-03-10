@@ -10,12 +10,10 @@
           "github.copilot",
           "ms-python.python",
           "ms-toolsai.jupyter",
-          "charliermarsh.ruff"
-        ],
-        "settings": {
-          "python.languageServer": "Pylance",
-          "jupyter.jupyterServerType": "local"
-        }
+          "charliermarsh.ruff",
+          "korbinianeckstein.niivue",
+          "njpwerner.autodocstring"
+        ]
       }
     },
     "remoteUser": "root",

@@ -1,0 +1,7 @@
+{
+    "autoDocstring.docstringFormat": "numpy",
+    "python.languageServer": "Pylance",
+    "jupyter.jupyterServerType": "local",
+    "editor.formatOnSave": true,
+    "terminal.integrated.defaultProfile.linux": "bash",
+}
