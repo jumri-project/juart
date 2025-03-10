@@ -2,3 +2,9 @@
 .ipynb_checkpoints
 **/*.nbi
 **/*.nbc
+*.DS_Store
+*egg-info
+*egg
+__pycache__
+
+/build
