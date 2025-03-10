@@ -24,5 +24,6 @@
     "mounts": [
       "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/host-home-folder,type=bind"
     ],
-    "postCreateCommand": "git config core.fileMode false"
+    "postCreateCommand": "git config core.fileMode false",
+    "postStartCommand": "pip install -e /workspaces/jail"
 }
