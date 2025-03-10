@@ -31,4 +31,5 @@ RUN mamba install --yes \
 RUN pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu \
     finufft \
-    torch
+    torch \
+    pip install -e /workspaces/jail \
