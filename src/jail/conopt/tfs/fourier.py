@@ -2,7 +2,7 @@ from typing import Tuple
 
 import torch
 
-from ..aux.fourier import (
+from ..functional.fourier import (
     fourier_transform_forward,
     nonuniform_fourier_transform_adjoint,
 )

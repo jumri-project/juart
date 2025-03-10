@@ -2,7 +2,7 @@ from typing import Optional, Tuple
 
 import torch
 
-from ..aux.wavelet import (
+from ..functional.wavelet import (
     wavelet_transfer_functions,
     wavelet_transfer_functions_nd,
     wavelet_transform_adjoint,

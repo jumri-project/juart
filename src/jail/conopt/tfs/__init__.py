@@ -2,8 +2,8 @@ from typing import Tuple
 
 import torch
 
-from ..aux import crop_tensor, pad_tensor
-from ..aux.fourier import fourier_transform_adjoint, fourier_transform_forward
+from ..functional import crop_tensor, pad_tensor
+from ..functional.fourier import fourier_transform_adjoint, fourier_transform_forward
 
 
 def apply_transfer_function(

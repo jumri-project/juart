@@ -2,8 +2,8 @@ from typing import Optional, Tuple
 
 import torch
 
-from ..aux.fourier import fourier_transform_adjoint, fourier_transform_forward
-from ..aux.system import (
+from ..functional.fourier import fourier_transform_adjoint, fourier_transform_forward
+from ..functional.system import (
     system_matrix_adjoint,
     system_matrix_forward,
     system_matrix_normal,
