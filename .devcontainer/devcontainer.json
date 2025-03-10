@@ -18,8 +18,12 @@
       }
     },
     "remoteUser": "root",
+    "updateRemoteUserUID": true,
+    "runArgs": [
+        "--userns=keep-id"
+    ],
     "mounts": [
-      "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/host-home-folder,type=bind,consistency=cached"
+      "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/host-home-folder,type=bind",
     ],
     "postCreateCommand": "git config core.fileMode false"
 }
