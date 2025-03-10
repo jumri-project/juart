@@ -3,7 +3,7 @@ from typing import Optional
 
 import torch
 
-from ..conopt.aux import norm
+from ..conopt.functional import norm
 
 
 class ConvergenceMonitor:

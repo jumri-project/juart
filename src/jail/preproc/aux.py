@@ -4,8 +4,8 @@ import subprocess
 import torch
 from threadpoolctl import threadpool_limits
 
-from ..conopt.aux import pad_tensor
-from ..conopt.aux.fourier import (
+from ..conopt.functional import pad_tensor
+from ..conopt.functional.fourier import (
     fourier_transform_adjoint,
     fourier_transform_forward,
     nonuniform_fourier_transform_adjoint,

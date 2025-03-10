@@ -1,7 +1,10 @@
 import torch
 
-from ..conopt.aux import crop_tensor, pad_tensor
-from ..conopt.aux.fourier import fourier_transform_adjoint, fourier_transform_forward
+from ..conopt.functional import crop_tensor, pad_tensor
+from ..conopt.functional.fourier import (
+    fourier_transform_adjoint,
+    fourier_transform_forward,
+)
 
 
 def interpolation(

@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from tqdm.auto import tqdm
 
-from ..conopt.aux.fourier import (
+from ..conopt.functional.fourier import (
     fourier_transform_adjoint,
 )
 from ..parim.gcc import (

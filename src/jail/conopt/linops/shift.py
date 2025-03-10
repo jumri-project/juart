@@ -2,7 +2,7 @@ from typing import Optional, Tuple
 
 import torch
 
-from ..aux.shift import shift_adjoint, shift_forward
+from ..functional.shift import shift_adjoint, shift_forward
 from . import LinearOperator
 
 

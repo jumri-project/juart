@@ -2,7 +2,7 @@ from typing import Optional, Tuple
 
 import torch
 
-from ..aux.hankel import (
+from ..functional.hankel import (
     block_hankel_adjoint,
     block_hankel_forward,
     block_hankel_normal,

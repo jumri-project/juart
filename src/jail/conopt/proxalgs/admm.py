@@ -2,7 +2,7 @@ from typing import Callable, Optional, Tuple, Union
 
 import torch
 
-from ..aux import norm
+from ..functional import norm
 from ..linops import LinearOperator
 
 
