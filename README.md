@@ -1,6 +1,6 @@
 # JAIL
 
-TBD
+Jülich Advanced Imaging Toolbox
 
 ## Onboarding
 
@@ -62,3 +62,23 @@ More details: [Sharing Git Credentials with Containers](https://code.visualstudi
 4. Wait for the container to build and start.
 
 Once started, you're ready to code inside the containerized development environment.
+
+## Issues
+
+### Files Showing as Modified in Git
+
+After opening the repository in the DevContainer, all files may appear as modified due to file mode changes:
+
+```
+diff --git a/<filename> b/<filename>
+old mode 100644
+new mode 100755
+```
+
+To prevent this issue, we use the following setting in `devcontainer.json`:
+
+```json
+"postCreateCommand": "git config core.fileMode false"
+```
+
+For more details, see the related discussion: [VS Code Remote Issue #1134](https://github.com/microsoft/vscode-remote-release/issues/1134).
