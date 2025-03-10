@@ -63,6 +63,30 @@ More details: [Sharing Git Credentials with Containers](https://code.visualstudi
 
 Once started, you're ready to code inside the containerized development environment.
 
+### Autoformatting and Linting
+
+The code uses Ruff for autoformatting and linting. Please install the git precommit hook
+
+## Linting and Formatting
+
+We use **Ruff** for linting and formatting. Make sure to install and use it correctly:
+
+### Setting Up Pre-Commit Hooks
+
+To ensure consistency, we use **pre-commit hooks** for automatic linting and formatting before committing changes.
+
+Set up the pre-commit hook:
+```sh
+pre-commit install
+```
+
+From now on, every time you commit code, `pre-commit` will automatically check and format files according to our rules.
+
+For manual checks, you can run:
+```sh
+pre-commit run --all-files
+```
+
 ## Issues
 
 ### Files Showing as Modified in Git
@@ -82,3 +106,4 @@ To prevent this issue, we use the following setting in `devcontainer.json`:
 ```
 
 For more details, see the related discussion: [VS Code Remote Issue #1134](https://github.com/microsoft/vscode-remote-release/issues/1134).
+
