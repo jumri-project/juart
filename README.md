@@ -87,6 +87,11 @@ For manual checks, you can run:
 pre-commit run --all-files
 ```
 
+To verify if the pre-commit hook is active, run:
+```sh
+ls -l .git/hooks/pre-commit
+```
+
 ## Issues
 
 ### Files Showing as Modified in Git
