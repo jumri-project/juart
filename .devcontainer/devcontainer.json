@@ -16,7 +16,7 @@
         ]
       }
     },
-    "remoteUser": "root",
+    "remoteUser": "nonroot",
     "updateRemoteUserUID": true,
     "runArgs": [
         "--userns=keep-id"
