@@ -15,7 +15,8 @@ dependencies = [
     "torch>=2.0.0",
     "finufft",
     "ismrmrd",
-    "threadpoolctl"
+    "threadpoolctl",
+    "pytorch-finufft"
 ]
 
 [project.optional-dependencies]
