@@ -7,7 +7,6 @@
     "customizations": {
       "vscode": {
         "extensions": [
-          "github.copilot",
           "ms-python.python",
           "ms-toolsai.jupyter",
           "charliermarsh.ruff"

@@ -1,6 +1,6 @@
-# JAIL
+# JuART
 
-Jülich Advanced Imaging Toolbox
+Jülich Advanced Reconstruction Toolbox
 
 ## Onboarding
 
@@ -63,13 +63,31 @@ More details: [Sharing Git Credentials with Containers](https://code.visualstudi
 
 Once started, you're ready to code inside the containerized development environment.
 
-### Autoformatting and Linting
+## Additional Configuration
 
-The code uses Ruff for autoformatting and linting. Please install the git precommit hook
+### Settings Configuration
 
-## Linting and Formatting
+To ensure that your local extensions are automatically installed inside a development container, you can configure the `settings.json` file of the Dev Containers extension. This approach ensures that all developers have the necessary extensions available without manual installation.
 
-We use **Ruff** for linting and formatting. Make sure to install and use it correctly:
+To configure this, follow these steps:
+
+1. Open Visual Studio Code.
+2. Open the command palette (Ctrl+Shift+P or Cmd+Shift+P).
+3. Type `Preferences: Open Settings (JSON)` and select it.
+4. Add the following configuration to your `settings.json` file:
+
+```json
+{
+    "remote.containers.defaultExtensions": [
+        // Add your extensions here, for example:
+        // "continue.continue",
+        // "GitHub.copilot",
+        // ...
+    ]
+}
+```
+
+For more details: [VS Code Dev Containers Documentation](https://code.visualstudio.com/docs/devcontainers/containers)
 
 ### Setting Up Pre-Commit Hooks
 
@@ -111,4 +129,3 @@ To prevent this issue, we use the following setting in `devcontainer.json`:
 ```
 
 For more details, see the related discussion: [VS Code Remote Issue #1134](https://github.com/microsoft/vscode-remote-release/issues/1134).
-
