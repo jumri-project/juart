@@ -25,6 +25,7 @@ RUN mamba install --yes \
     'pre-commit' \
     'ruff' \
     'scipy' \
+    'pytest' \
     && \
     mamba clean --all -f -y
 
