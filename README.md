@@ -34,8 +34,8 @@ This can also be done in the user settings JSON by adding the following line:
 Ensure you have Git installed, then clone the repository:
 
 ```sh
-git clone git@github.com:inm-4/jail.git
-cd jail
+git clone git@github.com:inm-4/juart.git
+cd juart
 ```
 
 ### Sharing Git Credentials with the Container
@@ -103,7 +103,7 @@ For more details: [VS Code Dev Containers Documentation](https://code.visualstud
 ### Setting Up Pre-Commit Hooks
 
 To ensure consistency, we use **pre-commit hooks** for automatic linting and formatting before committing changes.
-Open a terminal inside VS Code. Make sure that the directory path is pointing to `/workspaces/jail` 
+Open a terminal inside VS Code. Make sure that the directory path is pointing to `/workspaces/juart` 
 
 Set up the pre-commit hook:
 ```sh
@@ -141,3 +141,5 @@ To prevent this issue, we use the following setting in `devcontainer.json`:
 ```
 
 For more details, see the related discussion: [VS Code Remote Issue #1134](https://github.com/microsoft/vscode-remote-release/issues/1134).
+
+pip install --root-user-action=ignore -e . && 
