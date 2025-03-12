@@ -26,6 +26,8 @@ dependencies = [
     "numpy",
     "scipy",
     "finufft",
+    "jupyter",
+    "notebook",
 ]
 
 [project.optional-dependencies]
@@ -36,8 +38,8 @@ dev = [
 test = []
 
 [project.urls]
-homepage = "https://github.com/inm-4/jail"
-Issues = "https://github.com/inm-4/jail/issues"
+homepage = "https://github.com/inm-4/juart"
+Issues = "https://github.com/inm-4/juart/issues"
 # Documentation = ""
 
 [tool.setuptools]
