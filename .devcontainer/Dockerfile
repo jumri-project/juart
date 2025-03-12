@@ -14,21 +14,13 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mamba install --yes \
-    --channel conda-forge \
-    'h5py' \
-    'ipykernel' \
-    'ipympl' \
-    'matplotlib' \
-    'numpy' \
-    'pip' \
-    'pre-commit' \
-    'ruff' \
-    'scipy' \
-    && \
-    mamba clean --all -f -y
+COPY pyproject.toml /tmp/
 
-RUN pip install --no-cache-dir \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    finufft \
-    torch
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir uv
+
+RUN uv pip compile /tmp/pyproject.toml \
+    --output-file /tmp/requirements.txt \
+    --all-extras
+
+RUN pip install --no-cache-dir -r /tmp/requirements.txt

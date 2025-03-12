@@ -1,25 +1,26 @@
 {
-    "name": "Dev Container",
-    "build": {
-      "dockerfile": "Dockerfile"
-    },
-    "features": {},
-    "customizations": {
-      "vscode": {
-        "extensions": [
-          "ms-python.python",
-          "ms-toolsai.jupyter",
-          "charliermarsh.ruff"
-        ]
-      }
-    },
-    "remoteUser": "root",
-    "updateRemoteUserUID": true,
-    "runArgs": [
-        "--userns=keep-id"
-    ],
-    "mounts": [
-      "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/host-home-folder,type=bind"
-    ],
-    "postCreateCommand": "git config core.fileMode false"
+  "name": "Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "features": {},
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-toolsai.jupyter",
+        "charliermarsh.ruff"
+      ]
+    }
+  },
+  "remoteUser": "root",
+  "updateRemoteUserUID": true,
+  "runArgs": [
+    "--userns=keep-id"
+  ],
+  "mounts": [
+    "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/host-home-folder,type=bind"
+  ],
+  "postCreateCommand": "pip install --root-user-action=ignore -e . && git config core.fileMode false"
 }
