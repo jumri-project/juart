@@ -15,7 +15,10 @@ dependencies = [
     "torch>=2.0.0",
     "finufft",
     "ismrmrd",
-    "threadpoolctl"
+    "threadpoolctl",
+    "scipy",
+    "numpy",
+    "matplotlib",
 ]
 
 [project.optional-dependencies]

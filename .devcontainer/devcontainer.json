@@ -17,7 +17,7 @@
         }
       }
     },
-    "remoteUser": "root",
+    "remoteUser": "nonroot",
     "updateRemoteUserUID": true,
     "runArgs": [
         "--userns=keep-id"
@@ -25,5 +25,5 @@
     "mounts": [
       "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/host-home-folder,type=bind"
     ],
-    "postCreateCommand": "git config core.fileMode false"
+    "postCreateCommand": "sh /workspaces/jail/.devcontainer/.postcreate_setup.sh"
 }
