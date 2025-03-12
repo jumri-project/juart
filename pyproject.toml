@@ -20,7 +20,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-
+dev=[
+    "pytest"
+]
 [project.urls]
 homepage = "https://github.com/inm-4/jail"
 Issues = "https://github.com/inm-4/jail/issues"
