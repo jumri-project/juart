@@ -1,5 +1,5 @@
 import warnings
-from typing import Tuple
+from typing import Tuple, Union
 
 import finufft
 import pytorch_finufft
@@ -137,24 +137,20 @@ def nufft2d_type2(
 def nonuniform_fourier_transform_forward(
     k: torch.Tensor,
     x: torch.Tensor,
-    n_modes: Tuple[int, ...],
-    shape: Tuple[int, ...],
     eps: float = 1e-6,
 ) -> torch.Tensor:
     """
-    Compute the non-uniform Fourier transform (NUFFT) forward from non-uniform points to
-    a uniform grid.
+    Compute the non-uniform Fourier transform (NUFFT) forward from uniform grid to
+    non-uniform points.
 
     Parameters
     ----------
     k : torch.Tensor
-        Non-uniform sampling points of shape (2, num_samples).
+        Non-uniform sampling points of shape (D, N) or (D, N, ...)
+        with D dimensions (xyz) and N samples scaled between [-0.5, 0.5].
     x : torch.Tensor
-        Input data tensor.
-    n_modes : tuple of ints
-        Shape of the output grid (e.g., (nx, ny)).
-    shape : tuple
-        Shape of the input data.
+        Input data on a uniform grid of shape (C, R, P, S) or (C, R, P, S, ...)
+        with C channels and R readout, P phase and S slice samples.
     eps : float, optional
         Accuracy threshold for the NUFFT (default: 1e-6).
 
@@ -163,36 +159,90 @@ def nonuniform_fourier_transform_forward(
     torch.Tensor
         Fourier-transformed data on a uniform grid.
     """
-    norm = torch.sqrt(torch.tensor(n_modes[0] * n_modes[1], dtype=torch.float32))
+
+    # Ensure that the input kspace locations have correct scaling
+    if torch.any(k < -0.5) or torch.any(k > 0.5):
+        raise ValueError(
+            "Non-uniform sampling points k must be scaled between -0.5 and 0.5."
+        )
+
+    # Ensure x has at least shape (C, R, P, S, 1)
+    if x.ndim < 4:
+        raise ValueError("Input data x must have at least three dimensions.")
+    elif x.ndim == 4:
+        x = x.unsqueeze(4)  # Add additional dimension
+
+    # Ensure k has at least shape (D, N, 1)
+    if k.ndim < 2:
+        raise ValueError(
+            "Non-uniform sampling points k must have at least two dimensions."
+        )
+    elif k.ndim == 2:
+        k = k.unsqueeze(2)
+
+    D, N, *add_axes_k = k.shape
+    C, R, P, S, *add_axes_x = x.shape
+
+    if add_axes_k != add_axes_x:
+        raise ValueError(
+            "The additional axes in x and k must be the same "
+            f"but are {add_axes_x} and {add_axes_k}."
+        )
+
+    # Ensure correct dimension handling
+    if D == 1 and (R * P * S != max(R, P, S)):
+        raise ValueError(
+            "For 1D input kspace locations,"
+            " two of the data dimensions (R,P,S) must be 1."
+        )
+    if D == 2 and all(dim != 1 for dim in [R, P, S]):
+        raise ValueError(
+            "For 2D input kspace locations,"
+            " one of the data dimensions (R,P,S) must be 1."
+        )
+
+    norm = torch.sqrt(torch.tensor(R * P * S, dtype=torch.float32))
 
     k = 2 * torch.pi * k.to(torch.float32)
     x = x.to(torch.complex64)
-    y = torch.zeros(shape, dtype=x.dtype, device=x.device)
 
-    for S, TI, TE in torch.cartesian_prod(
-        torch.arange(shape[-3]), torch.arange(shape[-2]), torch.arange(shape[-1])
-    ):
-        y[:, 0, 0, :, S, TI, TE] = nufft2d_type2(
-            k[:, :, S, TI, TE].clone(),
-            x[:, :, :, 0, S, TI, TE].clone(),
-            n_modes=n_modes[:2],
-            eps=eps,
-        )
+    # Reshape x and k to have all additional axes as a single axis
+    x = x.reshape(C, R, P, S, -1)
+    k = k.reshape(D, N, -1)
+
+    y = torch.zeros((C, D, N, x.shape[-1]), dtype=x.dtype, device=x.device)
+    for n_cha in range(C):
+        for n_ax in range(x.shape[-1]):
+            k_tmp = k[..., n_ax]
+            # Squeeze in case D=2 and any of R, P, S is 1
+            x_tmp = x[n_cha, ..., n_ax].squeeze()
+
+            y_tmp = pytorch_finufft.functional.finufft_type2(
+                points=k_tmp,
+                targets=x_tmp,
+                eps=eps,
+            )
+
+            y[n_cha, ..., n_ax] = y_tmp
 
     y /= norm
+
+    # Reshape output data to have all additional axes as in original shape
+    y = y.reshape(C, D, N, *add_axes_x)
+
     return y
 
 
 def nonuniform_fourier_transform_adjoint(
     k: torch.Tensor,
     x: torch.Tensor,
-    n_modes: Tuple[int] | Tuple[int, int] | Tuple[int, int, int],
+    n_modes: Union[Tuple[int], Tuple[int, int], Tuple[int, int, int]],
     eps: float = 1e-6,
     nthreads: int = 1,
 ) -> torch.Tensor:
     """
-    Compute the non-uniform Fourier transform (NUFFT) adjoint from a uniform grid to
-    non-uniform points.
+    Compute the non-uniform Fourier transform (NUFFT) adjoint
+    from non-uniform points to a uniform grid.
 
     Parameters
     ----------
@@ -271,7 +321,7 @@ def nonuniform_fourier_transform_adjoint(
     x = x.reshape(num_cha, num_col, -1)
     k = k.reshape(num_dim, num_col, -1)
 
-    # Create empty outptu tensor
+    # Create empty output tensor
     x_out = torch.zeros(
         (*n_modes, num_cha, x.shape[-1]), dtype=x.dtype, device=x.device
     )
@@ -294,4 +344,8 @@ def nonuniform_fourier_transform_adjoint(
     # Reshape output data to have all additional axes as in original shape
     x_out = x_out.reshape(*n_modes, num_cha, *add_axes)
 
-    return x_out.squeeze()
+    # Remove singleton dimensions, ensuring the result has at least three dimensions
+    new_shape = x_out.shape[:3] + tuple(dim for dim in x_out.shape[3:] if dim != 1)
+    x_out = x_out.reshape(new_shape)
+
+    return x_out
