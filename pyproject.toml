@@ -3,19 +3,30 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "JAIL"
+name = "JuART"
 version = "0.0.1"
 authors = [{ name = "Markus Zimmermann", email = "m.zimmermann@fz-juelich.de" }]
 maintainers = [{ name = "Markus Zimmermann" }]
-description = "Juelich Advanced Imaging Library"
+description = "Juelich Advanced Reconstruction Toolbox"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
 dependencies = [
-    "torch>=2.0.0"
+    "torch>=2.0.0",
+    "h5py",
+    "ipykernel",
+    "ipympl",
+    "matplotlib",
+    "numpy",
+    "scipy",
+    "finufft",
 ]
 
 [project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "ruff",
+]
 
 [project.urls]
 homepage = "https://github.com/inm-4/jail"
