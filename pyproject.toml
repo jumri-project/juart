@@ -5,8 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "JuART"
 version = "0.0.1"
-authors = [{ name = "Markus Zimmermann", email = "m.zimmermann@fz-juelich.de" }]
-maintainers = [{ name = "Markus Zimmermann" }]
+authors = [
+    { name = "Markus Zimmermann", email = "m.zimmermann@fz-juelich.de" },
+    { name = "Felix Landmeyer", email = "f.landmeyer@fz-juelich.de" }
+]
+maintainers = [
+    { name = "Markus Zimmermann" },
+    { name = "Felix Landmeyer" }
+]
 description = "Juelich Advanced Reconstruction Toolbox"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -27,6 +33,7 @@ dev = [
     "pre-commit",
     "ruff",
 ]
+test = []
 
 [project.urls]
 homepage = "https://github.com/inm-4/jail"
