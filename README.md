@@ -1,6 +1,6 @@
-# JAIL
+# JuART
 
-Jülich Advanced Imaging Toolbox
+Jülich Advanced Reconstruction Toolbox
 
 ## Onboarding
 
@@ -34,8 +34,8 @@ This can also be done in the user settings JSON by adding the following line:
 Ensure you have Git installed, then clone the repository:
 
 ```sh
-git clone git@github.com:inm-4/jail.git
-cd jail
+git clone git@github.com:inm-4/juart.git
+cd juart
 ```
 
 ### Sharing Git Credentials with the Container
@@ -74,18 +74,36 @@ More details: [Sharing Git Credentials with Containers](https://code.visualstudi
 
 Once started, you're ready to code inside the containerized development environment.
 
-### Autoformatting and Linting
+## Additional Configuration
 
-The code uses Ruff for autoformatting and linting. Please install the git precommit hook
+### Settings Configuration
 
-## Linting and Formatting
+To ensure that your local extensions are automatically installed inside a development container, you can configure the `settings.json` file of the Dev Containers extension. This approach ensures that all developers have the necessary extensions available without manual installation.
 
-We use **Ruff** for linting and formatting. Make sure to install and use it correctly:
+To configure this, follow these steps:
+
+1. Open Visual Studio Code.
+2. Open the command palette (Ctrl+Shift+P or Cmd+Shift+P).
+3. Type `Preferences: Open Settings (JSON)` and select it.
+4. Add the following configuration to your `settings.json` file:
+
+```json
+{
+    "remote.containers.defaultExtensions": [
+        // Add your extensions here, for example:
+        // "continue.continue",
+        // "GitHub.copilot",
+        // ...
+    ]
+}
+```
+
+For more details: [VS Code Dev Containers Documentation](https://code.visualstudio.com/docs/devcontainers/containers)
 
 ### Setting Up Pre-Commit Hooks
 
 To ensure consistency, we use **pre-commit hooks** for automatic linting and formatting before committing changes.
-Open a terminal inside VS Code. Make sure that the directory path is pointing to `/workspaces/jail` 
+Open a terminal inside VS Code. Make sure that the directory path is pointing to `/workspaces/juart` 
 
 Set up the pre-commit hook:
 ```sh
@@ -124,3 +142,4 @@ To prevent this issue, we use the following setting in `devcontainer.json`:
 
 For more details, see the related discussion: [VS Code Remote Issue #1134](https://github.com/microsoft/vscode-remote-release/issues/1134).
 
+pip install --root-user-action=ignore -e . && 

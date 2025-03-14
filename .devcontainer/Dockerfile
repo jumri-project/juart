@@ -14,32 +14,13 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mamba install --yes \
-    --channel conda-forge \
-    'h5py' \
-    'ipykernel' \
-    'ipympl' \
-    'matplotlib' \
-    'numpy' \
-    'pip' \
-    'pre-commit' \
-    'ruff' \
-    'scipy' \
-    'pytest' \
-    && \
-    mamba clean --all -f -y
+COPY pyproject.toml /tmp/
 
-# Install finufft and torch
-# RUN pip install --no-cache-dir \
-#     --extra-index-url https://download.pytorch.org/whl/cpu
-#     finufft \
-#     torch
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir uv
 
-# Add non-root user
-ARG USERNAME=nonroot
-RUN groupadd --gid 1000 $USERNAME && \
-    useradd --uid 1000 --gid 1000 -m $USERNAME
+RUN uv pip compile /tmp/pyproject.toml \
+    --output-file /tmp/requirements.txt \
+    --all-extras
 
-## Make sure to reflect new user in PATH
-ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
-USER $USERNAME
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
