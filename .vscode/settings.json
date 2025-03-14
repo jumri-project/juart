@@ -3,12 +3,6 @@
     "python.languageServer": "Pylance",
     "jupyter.jupyterServerType": "local",
     "editor.formatOnSave": true,
-    "editor.parameterHints.enabled": true,
     "terminal.integrated.defaultProfile.linux": "bash",
-    "python.defaultInterpreterPath": "/opt/conda/bin/python",
-    "python.testing.pytestArgs": [
-        "tests"
-    ],
-    "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true,
+    "python.defaultInterpreterPath": "/opt/conda/bin/python"
 }
