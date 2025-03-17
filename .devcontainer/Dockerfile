@@ -1,4 +1,4 @@
-ARG BASE_CONTAINER=quay.io/condaforge/miniforge3
+ARG BASE_CONTAINER=python:3.12
 FROM $BASE_CONTAINER
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -23,4 +23,9 @@ RUN uv pip compile /tmp/pyproject.toml \
     --output-file /tmp/requirements.txt \
     --all-extras
 
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+# uv pip install currently leads to compatibility issues with ipywidgets.
+# As a result, we are using the standard pip installation method.
+# RUN uv pip install --no-cache-dir --system \
+#     --requirement /tmp/requirements.txt
+RUN pip install --no-cache-dir \
+    --requirement /tmp/requirements.txt
