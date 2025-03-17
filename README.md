@@ -141,5 +141,3 @@ To prevent this issue, we use the following setting in `devcontainer.json`:
 ```
 
 For more details, see the related discussion: [VS Code Remote Issue #1134](https://github.com/microsoft/vscode-remote-release/issues/1134).
-
-pip install --root-user-action=ignore -e . && 
