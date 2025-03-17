@@ -18,16 +18,18 @@ readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
 dependencies = [
-    "torch>=2.0.0",
+    "finufft",
     "h5py",
     "ipykernel",
     "ipympl",
+    "ipywidgets",
+    "ismrmrd",
     "matplotlib",
     "numpy",
-    "scipy",
-    "finufft",
-    "jupyter",
-    "notebook",
+    "scikit-image",
+    "threadpoolctl",
+    "torch>=2.0.0",
+    "tqdm",
 ]
 
 [project.optional-dependencies]
