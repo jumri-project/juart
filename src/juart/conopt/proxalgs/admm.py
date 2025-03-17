@@ -74,7 +74,7 @@ class ADMM:
         device : str, optional
             Device to run on, either 'cpu' or 'cuda' (default is 'cpu').
         """
-        self.device = torch.device(device)
+        self.device = device
         self.dtype = torch.float32
 
         self.prox_h = prox_h
