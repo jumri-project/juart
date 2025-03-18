@@ -1,9 +1,384 @@
-from typing import Union
+from typing import Literal, Union
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 from . import utils as ut
+
+
+def signal_equation(seq_type: str, **kwargs):
+    """Calculate the signal for a given sequence type and sequence parameters.
+
+    Parameters
+    ----------
+    seq_type : str
+        Sequence type (e.g. 'GRE', {'SE', 'IR', 'SSFP' are not supported}).
+    **kwargs:
+        Sequence parameters:
+        - 'spin_density': float
+            Spin density of the tissue [1/m^3].
+        - 't1': float
+            Longitudinal relaxation time [s].
+        - 't2p': float
+            Transverse relaxation time [s].
+        - 'tr': float
+            Repetition time [s].
+        - 'te': float or
+            Echo time [s].
+        - 'flip': float
+            Flip angle [rad].
+
+    Returns
+    -------
+    Singal : np.ndarray
+        Signal for the given sequence type and parameters for every `te` in **kwargs.
+
+    """
+    if isinstance(kwargs["te"], float):
+        kwargs["te"] = [kwargs["te"]]
+
+    kwargs["te"] = np.asarray(kwargs["te"])
+
+    if seq_type == "GRE":
+        signal = kwargs["spin_density"] * (
+            np.sin(kwargs["flip"])
+            * (1 - np.exp(-kwargs["tr"] / kwargs["t1"]))
+            / (1 - np.cos(kwargs["flip"]) * np.exp(-kwargs["tr"] / kwargs["t1"]))
+            * np.exp(-kwargs["te"] / kwargs["t2p"])
+        )
+
+        return signal
+
+
+class Geometry:
+    """Class for Ellipsoid with position parameters."""
+
+    def __init__(self, center: npt.ArrayLike, axes: npt.ArrayLike, angle: float):
+        self.center = np.asarray(center)
+        self.axes = np.asarray(axes)
+        self.angle = angle  # in rad
+
+        # Ellipsoid has to be 2D or 3D
+        if self.center.size not in [2, 3]:
+            raise ValueError("Center has to be an array of shape (2,) or (3,).")
+        if self.axes.size not in [2, 3]:
+            raise ValueError("Axes has to be an array of shape (3,).")
+
+    @property
+    def ndim(self):
+        return self.center.size
+
+    @property
+    def rot_matrix(self):
+        if self.ndim == 2:
+            rot_mat = np.array(
+                [
+                    [np.cos(self.angle), -np.sin(self.angle)],
+                    [np.sin(self.angle), np.cos(self.angle)],
+                ]
+            )
+        elif self.ndim == 3:
+            rot_mat = np.array(
+                [
+                    [np.cos(self.angle), -np.sin(self.angle), 0],
+                    [np.sin(self.angle), np.cos(self.angle), 0],
+                    [0, 0, 1],
+                ]
+            )
+        else:
+            raise ValueError(
+                "Rotation matrix is only defined for 2D and 3D ellipsoids."
+            )
+
+        return rot_mat
+
+    def scale(self, scale: Union[float, npt.ArrayLike]):
+        """Scale the ellipsoid by a scalar factor
+        or by a factor for each dimension (xyz)."""
+        if isinstance(scale, (int, float)):
+            self.center *= scale
+            self.axes *= scale
+        else:
+            scale = np.asarray(scale)
+            if scale.shape != (3,):
+                raise ValueError("Scale has to be a scalar or an array of shape (3,).")
+            self.center *= scale
+            self.axes *= scale
+
+    def get_support(self, r: npt.ArrayLike):
+        """Returns a mask which elements of the input r are inside the ellipsoid.
+
+        Parameters
+        ----------
+        r : npt.ArrayLike, Shape (D, N)
+            Location samples for which support should be returned [m].
+
+        Returns
+        -------
+        bool ndarray, Shape (N,)
+            Support mask which samples of "r" are inside the ellipsoid.
+
+        Raises
+        ------
+        ValueError
+            If r has not the same number of dimensions as the ellipsoid.
+        """
+        num_dim, num_samples = r.shape
+
+        if num_dim != self.ndim:
+            raise ValueError(
+                "r has to have the same number of dimensions as the ellipsoid."
+            )
+
+        # Transform ellipsoid back to unit sphere
+        sphere = (
+            (self.rot_matrix @ (r - self.center[:, None] / 2)) / self.axes[:, None]
+        ) ** 2
+
+        # Calculate the support of the ellipsoid
+        support = np.sum(sphere, axis=0) <= 1
+
+        return support
+
+
+class Tissue:
+    """Class for tissue parameters."""
+
+    def __init__(
+        self,
+        spin_density: float,
+        t1_fitA: float,
+        t1_fitC: float,
+        t2: float,
+        chi: float,
+        type: str,
+    ):
+        self.spin_density = spin_density
+        self.t1_fitA = t1_fitA
+        self.t1_fitC = t1_fitC
+        self.t2 = t2  # Assume T2 does not change with B0
+        self.chi = chi
+        self.type = type
+
+    def get_t1(self, b0: float):
+        """Calculates the T1 relaxation time in seconds
+        based on the main magnetic field strength (B0).
+
+        Parameters
+        ----------
+        b0 : float
+            The main magnetic field strength in Tesla [T].
+
+        Returns
+        -------
+        t1:
+            The calculated T1 relaxation time in seconds.
+            If the parameters `t1_fitA` or `t1_fitC` are not set,
+            a default value of 4.2 seconds is returned.
+            Otherwise, the T1 time is computed using the formula:
+            T1 = t1_fitA * B0^t1_fitC.
+        """
+        if self.t1_fitA is None or self.t1_fitC is None:
+            return 4.2
+        else:
+            return self.t1_fitA * b0**self.t1_fitC
+
+    def get_t2s(self, b0: float, gamma: float):
+        """Calculate T2* values.
+
+        Parameters
+        ----------
+        b0 : float
+            Main magnetic field in [T]
+        gamma : float
+            Gyromag. ratio in [Hz/T]
+
+        Returns
+        -------
+        t2s: float
+            T2* relaxation time in [s]
+        """
+        return 1 / (1 / self.t2 + gamma / (2 * np.pi) * np.abs(b0 * self.chi * 1e-6))
+
+    def get_signal(self, seq_type: str = "GRE", **kwargs):
+        """Get the signal
+        of the tissue for a given sequence type and sequence parameters.
+
+        Parameters
+        ----------
+        seq_type : str, optional
+            Sequence type for which to calculate the signal, by default 'GRE'
+        **kwargs:
+            Sequence parameters:
+            - 'te': float
+                Echo time [s].
+            - 'tr': float
+                Repetition time [s].
+            - 'flip': float
+                Flip angle [rad].
+            - 'b0': float
+                Main magnetic field strength [T].
+            - 'gamma': float
+                Gyromagnetic ratio of H [Hz/T].
+
+        Returns
+        -------
+        signal : np.ndarray, Shape (E,)
+            Signal of the tissue for the given sequence type and parameters.
+            If `te` is a scalar, E = 1.
+            If `te` is an array of size E, the signal is an array of size E.
+
+        """
+        if kwargs is None:
+            kwargs = {}
+
+        # Default values
+        defaults = {
+            "te": 5e-3,
+            "tr": 2,
+            "flip": np.deg2rad(30),
+            "b0": 3.0,
+            "gamma": 42.576e6,
+        }
+
+        # Update kwargs with defaults if not already defined
+        for key, value in defaults.items():
+            kwargs.setdefault(key, value)
+
+        t1 = self.get_t1(kwargs["b0"])
+
+        if seq_type == "GRE":
+            t2p = self.get_t2s(kwargs["b0"], kwargs["gamma"])
+        else:
+            t2p = self.t2
+
+        kwargs["t1"] = t1
+        kwargs["t2p"] = t2p
+        kwargs["spin_density"] = self.spin_density
+
+        signal = signal_equation(seq_type=seq_type, **kwargs)
+
+        return signal
+
+
+class Ellipsoid:
+    """Class for Ellipsoid with tissue parameters."""
+
+    def __init__(
+        self,
+        geometry: Geometry,
+        tissue: Tissue,
+        counter: int,
+    ):
+        self.geometry = geometry
+        self.tissue = tissue
+        self.counter = counter
+
+    @property
+    def ndim(self):
+        return self.geometry.ndim
+
+    def get_object(
+        self,
+        matrix: npt.ArrayLike,
+        fov: npt.ArrayLike,
+        seq_type: str,
+        seq_params: dict,
+    ):
+        """Generate the signal object for the ellipsoid.
+
+        Parameters
+        ----------
+        matrix : npt.ArrayLike, Shape (D,)
+            Number of grid points along each dimension.
+        fov : npt.ArrayLike, Shape (D,)
+            Field of view in meters for each dimension.
+        seq_type : str, optional
+            Sequence type for which to calculate the signal, by default 'GRE'.
+        seq_params : Optional[dict], optional
+            Sequence parameters
+            such as 'te', 'tr', 'flip', 'b0', and 'gamma', by default None.
+
+        Returns
+        -------
+        np.ndarray, Shape (M, *grid_size, E)
+            Signal object for the ellipsoid. The shape depends on the grid size and the
+            number of echo times `te` (E) contained in `seq_params`.
+        """
+        matrix = np.asarray(matrix)
+        fov = np.asarray(fov)
+
+        if not matrix.size == fov.size:
+            raise ValueError("Matrix and fov have to have the same length.")
+        if not matrix.size == self.ndim:
+            raise ValueError(
+                "Matrix and ellipsoid have to have the same number of dimensions."
+            )
+
+        loc = create_image_grid_locations(matrix, fov, format="grid")
+        num_dim, *grid_shape = loc.shape
+
+        # Reshape to (ndim, Nsamples)
+        loc = loc.reshape(self.ndim, -1)
+
+        support = self.geometry.get_support(loc)
+
+        signal = self.tissue.get_signal(seq_type=seq_type, **seq_params)
+        num_echoes = signal.size
+
+        signal_obj = support[..., None] * signal
+
+        return signal_obj.reshape((*grid_shape, num_echoes))
+
+
+def create_image_grid_locations(
+    grid_size: npt.ArrayLike,
+    fov: npt.ArrayLike,
+    format: Literal["grid", "vec"] = "vec",
+):
+    """Creates a cartesian grid in image space from [-fov/2, +fov/2] in real
+    si units locations r [m].
+
+    Parameters
+    ----------
+    grid_size : ArrayLike, Shape (M,)
+        Grid size of the cartesian grid.
+    fov : ArrayLike, Shape (M,)
+        Field of view.
+    format : str, optional
+        'grid' -> returns meshgrid of size (Ndim, *grid_size)
+        'vec' -> returns matrix of shape (Nsamples, Ndim) as vector
+                of grid location for all grid points
+        by default 'grid'
+
+    Returns
+    -------
+    ndarrray, Shape (M, *grid_size) : if format=='grid'
+    ndarray, Shape (M, prod(grid_size)) : if format='vec'
+    """
+
+    grid_size = np.asarray(grid_size)
+    fov = np.asarray(fov)
+
+    if not (grid_size.size == fov.size):
+        raise ValueError("grid_size and fov have to have the same length.")
+
+    grid_ticks = []
+
+    for g, f in zip(grid_size, fov):
+        dr = f / g
+        gt = np.arange(g) * dr - f / 2 + dr / 2
+        grid_ticks.append(gt)
+
+    mesh_locs = np.meshgrid(*grid_ticks)
+
+    if format == "grid":
+        return np.array(mesh_locs)
+
+    elif format == "vec":
+        return np.column_stack([ml.ravel() for ml in mesh_locs])
+
 
 # fmt: off
 # ruff: noqa: F501
