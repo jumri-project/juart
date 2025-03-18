@@ -146,11 +146,13 @@ class Geometry:
             )
 
         # Transform ellipsoid back to unit sphere
-        rot_ellipsoid = torch.matmul(self.rot_matrix, (r - self.center[:, None] / 2))
-        sphere = rot_ellipsoid / self.axes[:, None]
+        ellip_shift = r - self.center[:, None] / 2
 
-        # Calculate the support of the ellipsoid
-        support = torch.linalg.vector_norm(sphere, dim=0) <= 1
+        ellip_rot = torch.matmul(self.rot_matrix, ellip_shift)
+
+        sphere = ellip_rot**2 / self.axes[:, None] ** 2
+
+        support = sphere.sum(dim=0) <= 1
 
         return support
 
