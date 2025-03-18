@@ -3,6 +3,7 @@ from typing import Literal, Union
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import torch
 
 from . import utils as ut
 
@@ -54,37 +55,49 @@ def signal_equation(seq_type: str, **kwargs):
 class Geometry:
     """Class for Ellipsoid with position parameters."""
 
-    def __init__(self, center: npt.ArrayLike, axes: npt.ArrayLike, angle: float):
-        self.center = np.asarray(center)
-        self.axes = np.asarray(axes)
-        self.angle = angle  # in rad
-
+    def __init__(
+        self,
+        center: npt.ArrayLike,
+        axes: npt.ArrayLike,
+        angle: float,
+        device: str = "cpu",
+    ):
+        self.device = device
+        self.center = torch.as_tensor(center, dtype=torch.float32, device=self.device)
+        self.axes = torch.as_tensor(axes, dtype=torch.float32, device=self.device)
+        self.angle = torch.as_tensor(
+            angle, dtype=torch.float32, device=self.device
+        )  # in rad
         # Ellipsoid has to be 2D or 3D
-        if self.center.size not in [2, 3]:
+        if self.center.shape[0] not in [2, 3]:
             raise ValueError("Center has to be an array of shape (2,) or (3,).")
-        if self.axes.size not in [2, 3]:
+        if self.axes.shape[0] not in [2, 3]:
             raise ValueError("Axes has to be an array of shape (3,).")
 
     @property
     def ndim(self):
-        return self.center.size
+        return self.center.shape[0]
 
     @property
     def rot_matrix(self):
         if self.ndim == 2:
-            rot_mat = np.array(
+            rot_mat = torch.tensor(
                 [
-                    [np.cos(self.angle), -np.sin(self.angle)],
-                    [np.sin(self.angle), np.cos(self.angle)],
-                ]
+                    [torch.cos(self.angle), -torch.sin(self.angle)],
+                    [torch.sin(self.angle), torch.cos(self.angle)],
+                ],
+                device=self.device,
+                dtype=torch.float32,
             )
         elif self.ndim == 3:
-            rot_mat = np.array(
+            rot_mat = torch.tensor(
                 [
-                    [np.cos(self.angle), -np.sin(self.angle), 0],
-                    [np.sin(self.angle), np.cos(self.angle), 0],
+                    [torch.cos(self.angle), -torch.sin(self.angle), 0],
+                    [torch.sin(self.angle), torch.cos(self.angle), 0],
                     [0, 0, 1],
-                ]
+                ],
+                device=self.device,
+                dtype=torch.float32,
             )
         else:
             raise ValueError(
@@ -93,30 +106,30 @@ class Geometry:
 
         return rot_mat
 
-    def scale(self, scale: Union[float, npt.ArrayLike]):
+    def scale(self, scale: Union[float, torch.tensor]):
         """Scale the ellipsoid by a scalar factor
         or by a factor for each dimension (xyz)."""
         if isinstance(scale, (int, float)):
             self.center *= scale
             self.axes *= scale
         else:
-            scale = np.asarray(scale)
-            if scale.shape != (3,):
+            scale = torch.as_tensor(scale, device=self.device)
+            if scale.shape[0] != 3:
                 raise ValueError("Scale has to be a scalar or an array of shape (3,).")
             self.center *= scale
             self.axes *= scale
 
-    def get_support(self, r: npt.ArrayLike):
+    def get_support(self, r: torch.tensor) -> torch.tensor:
         """Returns a mask which elements of the input r are inside the ellipsoid.
 
         Parameters
         ----------
-        r : npt.ArrayLike, Shape (D, N)
+        r : tensor, Shape (D, N)
             Location samples for which support should be returned [m].
 
         Returns
         -------
-        bool ndarray, Shape (N,)
+        tensor, Shape (N,)
             Support mask which samples of "r" are inside the ellipsoid.
 
         Raises
@@ -124,6 +137,7 @@ class Geometry:
         ValueError
             If r has not the same number of dimensions as the ellipsoid.
         """
+        r = torch.as_tensor(r, device=self.device, dtype=torch.float32)
         num_dim, num_samples = r.shape
 
         if num_dim != self.ndim:
@@ -132,12 +146,11 @@ class Geometry:
             )
 
         # Transform ellipsoid back to unit sphere
-        sphere = (
-            (self.rot_matrix @ (r - self.center[:, None] / 2)) / self.axes[:, None]
-        ) ** 2
+        rot_ellipsoid = torch.matmul(self.rot_matrix, (r - self.center[:, None] / 2))
+        sphere = rot_ellipsoid / self.axes[:, None]
 
         # Calculate the support of the ellipsoid
-        support = np.sum(sphere, axis=0) <= 1
+        support = torch.linalg.vector_norm(sphere, dim=0) <= 1
 
         return support
 
@@ -276,81 +289,91 @@ class Ellipsoid:
         self.counter = counter
 
     @property
+    def device(self):
+        return self.geometry.device
+
+    @property
     def ndim(self):
         return self.geometry.ndim
 
     def get_object(
-        self,
-        matrix: npt.ArrayLike,
-        fov: npt.ArrayLike,
-        seq_type: str,
-        seq_params: dict,
+        self, matrix: torch.tensor, fov: torch.tensor, seq_type: str, seq_params: dict
     ):
         """Generate the signal object for the ellipsoid.
 
         Parameters
         ----------
-        matrix : npt.ArrayLike, Shape (D,)
+        matrix : torch.tensor, Shape (D,)
             Number of grid points along each dimension.
-        fov : npt.ArrayLike, Shape (D,)
+        fov : torch.tensor, Shape (D,)
             Field of view in meters for each dimension.
         seq_type : str, optional
             Sequence type for which to calculate the signal, by default 'GRE'.
         seq_params : Optional[dict], optional
             Sequence parameters
             such as 'te', 'tr', 'flip', 'b0', and 'gamma', by default None.
-
+        device : str, optional
+            Device on which to calculate the signal, by default 'cpu'.
         Returns
         -------
         np.ndarray, Shape (M, *grid_size, E)
             Signal object for the ellipsoid. The shape depends on the grid size and the
             number of echo times `te` (E) contained in `seq_params`.
         """
-        matrix = np.asarray(matrix)
-        fov = np.asarray(fov)
+        matrix = torch.asarray(matrix, dtype=torch.int32, device=self.device)
+        fov = torch.asarray(fov, dtype=torch.float32, device=self.device)
 
-        if not matrix.size == fov.size:
+        if not matrix.shape[0] == fov.shape[0]:
             raise ValueError("Matrix and fov have to have the same length.")
-        if not matrix.size == self.ndim:
+        if not matrix.shape[0] == self.ndim:
             raise ValueError(
                 "Matrix and ellipsoid have to have the same number of dimensions."
             )
 
-        loc = create_image_grid_locations(matrix, fov, format="grid")
+        loc = create_image_grid_locations(
+            matrix, fov, format="grid", device=self.device
+        )
         num_dim, *grid_shape = loc.shape
 
         # Reshape to (ndim, Nsamples)
-        loc = loc.reshape(self.ndim, -1)
+        loc = loc.view(self.ndim, -1)
 
         support = self.geometry.get_support(loc)
 
-        signal = self.tissue.get_signal(seq_type=seq_type, **seq_params)
-        num_echoes = signal.size
+        signal = torch.as_tensor(
+            self.tissue.get_signal(seq_type=seq_type, **seq_params),
+            dtype=torch.float32,
+            device=self.device,
+        )
+        num_echoes = signal.shape[0]
 
         signal_obj = support[..., None] * signal
 
-        return signal_obj.reshape((*grid_shape, num_echoes))
+        return signal_obj.view((*grid_shape, num_echoes))
 
 
 def create_image_grid_locations(
-    grid_size: npt.ArrayLike,
-    fov: npt.ArrayLike,
+    grid_size: torch.tensor,
+    fov: torch.tensor,
     format: Literal["grid", "vec"] = "vec",
+    device: str = "cpu",
 ):
     """Creates a cartesian grid in image space from [-fov/2, +fov/2] in real
     si units locations r [m].
 
     Parameters
     ----------
-    grid_size : ArrayLike, Shape (M,)
+    grid_size : Tensor, Shape (M,)
         Grid size of the cartesian grid.
-    fov : ArrayLike, Shape (M,)
+    fov : Tensor, Shape (M,)
         Field of view.
     format : str, optional
         'grid' -> returns meshgrid of size (Ndim, *grid_size)
         'vec' -> returns matrix of shape (Nsamples, Ndim) as vector
                 of grid location for all grid points
         by default 'grid'
+    device : str, optional
+        Device on which to calculate the signal, by default 'cpu'.
 
     Returns
     -------
@@ -358,26 +381,32 @@ def create_image_grid_locations(
     ndarray, Shape (M, prod(grid_size)) : if format='vec'
     """
 
-    grid_size = np.asarray(grid_size)
-    fov = np.asarray(fov)
+    grid_size = torch.as_tensor(grid_size, dtype=torch.int32, device=device)
+    fov = torch.as_tensor(fov, dtype=torch.float32, device=device)
 
-    if not (grid_size.size == fov.size):
+    if not (grid_size.size() == fov.size()):
         raise ValueError("grid_size and fov have to have the same length.")
 
+    # Create a grid in image space which contains the
+    # locations of the pixel centres of the grid
     grid_ticks = []
 
     for g, f in zip(grid_size, fov):
         dr = f / g
-        gt = np.arange(g) * dr - f / 2 + dr / 2
+        gt = torch.arange(g, device=fov.device, dtype=fov.dtype) * dr - f / 2 + dr / 2
         grid_ticks.append(gt)
 
-    mesh_locs = np.meshgrid(*grid_ticks)
+    mesh_locs = torch.meshgrid(*grid_ticks, indexing="ij")
+    mesh_locs = torch.stack(mesh_locs, dim=0)
 
     if format == "grid":
-        return np.array(mesh_locs)
+        return mesh_locs
 
     elif format == "vec":
-        return np.column_stack([ml.ravel() for ml in mesh_locs])
+        return mesh_locs.view(mesh_locs.shape[0], -1)
+
+    else:
+        raise ValueError("format has to be 'grid' or 'vec'.")
 
 
 # fmt: off
