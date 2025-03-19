@@ -26,10 +26,12 @@ dependencies = [
     "ismrmrd",
     "matplotlib",
     "numpy",
+    "s3fs",
     "scikit-image",
     "threadpoolctl",
     "torch>=2.0.0",
     "tqdm",
+    "zarr",
 ]
 
 [project.optional-dependencies]
