@@ -1,4 +1,4 @@
-import time
+import time  # noqa: I001
 from typing import Tuple, Union
 
 import numpy as np
@@ -6,7 +6,7 @@ import numpy as np
 from . import coils as cs
 from . import imagespace as im
 from . import kspace as ks
-from . import params as pa
+from . import ellipsoids as pa
 from . import utils as ut
 
 
