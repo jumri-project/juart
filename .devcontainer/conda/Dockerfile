@@ -16,4 +16,8 @@ RUN apt-get update \
 
 COPY environment.yml /tmp/
 
-# RUN mamba env update /tmp/environment.yml
+RUN mamba env update \
+    --name "base" \
+    --file /tmp/environment.yml \
+    && \
+    mamba clean --all -f -y

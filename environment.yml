@@ -1,5 +1,5 @@
-name: default
-
+channels:
+  - conda-forge
 dependencies:
   - h5py
   - ipykernel
@@ -7,6 +7,9 @@ dependencies:
   - ipywidgets
   - matplotlib
   - numpy
+  - pip
+  - pre-commit
+  - ruff
   - s3fs
   - scikit-image
   - threadpoolctl
