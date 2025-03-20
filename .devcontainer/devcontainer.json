@@ -20,7 +20,8 @@
     "--userns=keep-id"
   ],
   "mounts": [
-    "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/host-home-folder,type=bind"
+    "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/host-home-folder,type=bind",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.aws,target=/root/.aws,type=bind"
   ],
-  "postCreateCommand": "pip install --root-user-action=ignore -e . && git config core.fileMode false"
+  "postCreateCommand": "sh .devcontainer/post-create.sh"
 }
