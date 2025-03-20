@@ -7,24 +7,18 @@ import numpy.typing as npt
 import pandas as pd
 import torch
 
-DEFAULT_GRE_PARAMS = {
-    "te": 5e-3,
-    "tr": 2,
-    "flip": np.deg2rad(30),
-    "b0": 3.0,
-    "gamma": 42.576e6,
-}
+from .coils import Coil
 
 
-def signal_equation(seq_type: str, **kwargs):
+def signal_equation(**kwargs):
     """Calculate the signal for a given sequence type and sequence parameters.
 
     Parameters
     ----------
-    seq_type : str
-        Sequence type (e.g. 'GRE', {'SE', 'IR', 'SSFP' are not supported}).
     **kwargs:
         Sequence parameters:
+        - 'seq_type': str
+            Sequence type for which to calculate the signal.
         - 'spin_density': float
             Spin density of the tissue [1/m^3].
         - 't1': float
@@ -49,7 +43,7 @@ def signal_equation(seq_type: str, **kwargs):
 
     kwargs["te"] = np.asarray(kwargs["te"])
 
-    if seq_type == "GRE":
+    if kwargs["seq_type"] == "GRE":
         signal = kwargs["spin_density"] * (
             np.sin(kwargs["flip"])
             * (1 - np.exp(-kwargs["tr"] / kwargs["t1"]))
@@ -91,7 +85,7 @@ class Geometry:
         if "center_z" in d:
             center = [d["center_x"], d["center_y"], d["center_z"]]
             axes = [d["axis_a"], d["axis_b"], d["axis_c"]]
-            angle = d["angle"]
+            angle = math.radians(d["angle"])
         else:
             center = [d["center_x"], d["center_y"]]
             axes = [d["axis_a"], d["axis_b"]]
@@ -181,7 +175,7 @@ class Geometry:
 
         sphere = ellip_rot**2 / self.axes[:, None] ** 2
 
-        support = sphere.sum(dim=0) <= 1
+        support = sphere.sum(dim=0) <= 0.98  # Adjust for small rounding errors
 
         return support
 
@@ -405,16 +399,16 @@ class Tissue:
         """
         return 1 / (1 / self.t2 + gamma / (2 * math.pi) * np.abs(b0 * self.chi * 1e-6))
 
-    def get_signal(self, seq_type: str = "GRE", **kwargs):
+    def get_signal(self, **kwargs):
         """Get the signal
         of the tissue for a given sequence type and sequence parameters.
 
         Parameters
         ----------
-        seq_type : str, optional
-            Sequence type for which to calculate the signal, by default 'GRE'
         **kwargs:
             Sequence parameters:
+            - 'seq_type': str
+                Sequence type for which to calculate the signal.
             - 'te': float
                 Echo time [s].
             - 'tr': float
@@ -434,20 +428,9 @@ class Tissue:
             If `te` is an array of size E, the signal is an array of size E.
 
         """
-        if kwargs is None:
-            if seq_type == "GRE":
-                kwargs = DEFAULT_GRE_PARAMS
-            else:
-                raise ValueError(
-                    (
-                        "Sequence parameters have to be provided for sequence types "
-                        "other than 'GRE'."
-                    )
-                )
-
         t1 = self.get_t1(kwargs["b0"])
 
-        if seq_type == "GRE":
+        if kwargs["seq_type"] == "GRE":
             t2p = self.get_t2s(kwargs["b0"], kwargs["gamma"])
         else:
             t2p = self.t2
@@ -456,7 +439,7 @@ class Tissue:
         kwargs["t2p"] = t2p
         kwargs["spin_density"] = self.spin_density
 
-        signal = signal_equation(seq_type=seq_type, **kwargs)
+        signal = signal_equation(**kwargs)
 
         return signal
 
@@ -499,11 +482,10 @@ class Ellipsoid:
         or by a factor for each dimension (xyz)."""
         self.geometry.scale(scale)
 
-    def get_object_signal(
+    def get_object(
         self,
         matrix: torch.tensor,
         fov: torch.tensor,
-        seq_type: str = "GRE",
         seq_params: Optional[dict] = None,
     ):
         """Generate the signal object for the ellipsoid.
@@ -524,16 +506,17 @@ class Ellipsoid:
         signal_obj : torch.tensor, Shape (*grid_size, E)
             Signal object for the ellipsoid on the grid with E echoes.
         """
-        if seq_params is None:
-            seq_params = DEFAULT_GRE_PARAMS
 
         support = self.get_object_geometry(matrix, fov)
 
-        signal = torch.as_tensor(
-            self.tissue.get_signal(seq_type=seq_type, **seq_params),
-            dtype=torch.float32,
-            device=self.device,
-        )
+        if seq_params is None:
+            signal = self.tissue.spin_density
+        else:
+            signal = torch.as_tensor(
+                self.tissue.get_signal(**seq_params),
+                dtype=torch.float32,
+                device=self.device,
+            )
 
         signal_obj = support[..., None] * signal
 
@@ -558,7 +541,6 @@ class Ellipsoid:
     def get_ksp_signal(
         self,
         ktraj: torch.tensor,
-        seq_type: str = "GRE",
         seq_params: Optional[dict] = None,
     ) -> torch.tensor:
         """Calculate the k-space signal for the ellipsoid geometry.
@@ -571,7 +553,7 @@ class Ellipsoid:
         seq_type : str, optional
             Sequence type for which to calculate the signal, by default 'GRE'
         seq_params : dict, optional
-            Sequence parameters, by default a default set of GRE parameters is used.
+            Sequence parameters, by default only the spin-density is used.
 
         Returns
         -------
@@ -586,29 +568,30 @@ class Ellipsoid:
             (N, 1), and each element corresponds to the signal at the corresponding
             `te`.\
         """
-        if seq_params is None:
-            if seq_type == "GRE":
-                seq_params = DEFAULT_GRE_PARAMS
-            else:
-                raise ValueError(
-                    "Sequence parameters have to be provided"
-                    " for sequence types other than 'GRE'."
-                )
 
         geom_sig = self.geometry.get_ksp_vec(ktraj)
 
-        decay_sig = torch.as_tensor(
-            self.tissue.get_signal(seq_type=seq_type, **seq_params),
-            dtype=torch.float32,
-            device=self.device,
-        )
+        if seq_params is None:
+            tissue_sig = torch.as_tensor(
+                self.tissue.spin_density,
+                dtype=torch.float32,
+                device=self.device,
+            )
+        else:
+            tissue_sig = torch.as_tensor(
+                self.tissue.get_signal(**seq_params),
+                dtype=torch.float32,
+                device=self.device,
+            )
 
         num_dim, num_samples = ktraj.shape
 
-        if decay_sig.size(0) != num_samples:
-            return geom_sig[:, None] * decay_sig
+        if tissue_sig.size(0) != num_samples:
+            output = geom_sig[:, None] * tissue_sig
         else:
-            return (geom_sig * decay_sig)[:, None]
+            output = (geom_sig * tissue_sig)[:, None]
+
+        return output
 
     def get_kspace_geometry(self, ktraj: torch.tensor) -> torch.tensor:
         """Calculate the k-space signal for the ellipsoid geometry.
@@ -662,6 +645,64 @@ class SheppLogan:
     def device(self):
         return self.fov.device
 
+    def add_coil(self, coil: Optional[Coil] = None):
+        """Add a coil to the phantom."""
+        if coil is None:
+            r = torch.max(self.fov) / 2
+            z = 0 if self.ndim == 2 else [-self.fov[2] / 4, 0, +self.fov[2] / 4]
+            num_channels_ring = 8
+            phi0 = 0 if self.ndim == 2 else [0, 2 * math.pi / num_channels_ring, 0]
+            coil = Coil(
+                coil_radius=r,
+                num_loops_ring=num_channels_ring,
+                z_pos=z,
+                phi0=phi0,
+            )
+
+            # Adjust coil shape to ellipsoid shape of phantom
+            a, b = self.ellipsoids[0].geometry.axes[:2]
+            for cha in self.coil.coil_loops:
+                phi = torch.arctan2(cha.r_cent[1], cha.r_cent[0])
+
+                new_r = 3 * self.fov[0] / 2 + np.sqrt(
+                    a * torch.cos(phi) ** 2 + b * torch.sin(phi) ** 2
+                )
+
+                cha.r_cent = np.array(
+                    [new_r * torch.cos(phi), new_r * torch.sin(phi), cha.r_cent[2]]
+                )
+
+                cha._build_coil_elements()
+
+            self.coil = coil
+
+        else:
+            self.coil = coil
+
+    def get_object(self, seq_params: Optional[dict] = None):
+        """Generate the signal object for the ellipsoid.
+
+        Returns
+        -------
+        signal_obj : torch.tensor, Shape (*grid_size, E)
+            Signal object for the ellipsoid on the grid with E echoes.
+        seq_params: dict, optional
+            Sequence parameters, by default each ellipsoids signal
+            is its spin density.
+        """
+        num_echoes = 1 if seq_params is None else len(seq_params["te"])
+
+        signal_obj = torch.zeros(
+            *self.matrix, num_echoes, dtype=torch.float32, device=self.device
+        )
+
+        for ellipsoid in self.ellipsoids:
+            sig_ellipsoid = ellipsoid.get_object(self.matrix, self.fov, seq_params)
+
+            signal_obj += sig_ellipsoid
+
+        return signal_obj
+
     def _create_ellipsoids(self):
         ellipsoids = []
         ellips_counter = 0
@@ -703,6 +744,9 @@ class SheppLogan:
             # but it works and is easy to implement
             for n_ellipse in range(1, ellips_params.shape[0]):
                 geom_params = ellips_params.loc[n_ellipse].to_dict()
+
+                if geom_params["type"] == "clot":
+                    continue
 
                 if n_ellipse < 4:
                     neg_params = ellips_params.loc[n_ellipse - 1].to_dict()
@@ -790,14 +834,14 @@ def create_image_grid_locations(
 # fmt: off
 # ruff: noqa: F501
 Ellipsoids_3D = pd.DataFrame({
-    'center_x':     [0.00   , 0.00  , 0.00      , 0.00      , -0.22 , 0.22  , 0.00      , 0.0       , -0.08     , 0.06      , 0.0       , 0.00      , 0.06      , 0.00  , 0.56      ], # noqa: E501
-    'center_y':     [0.00   , 0.00  , -0.0184   , -0.0184   , 0.000 , 0.00  , 0.35      , 0.1       , -0.605    , -0.605    , -0.10     , -0.605    , -0.105    , 0.1   , -0.4      ], # noqa: E501
-    'center_z':     [0.00   , 0.00  , 0.00      , 0.0000    , -0.25 , -0.25 , -0.25     , -0.25     , -0.25     , -0.25     , -0.25     , -0.25     , 0.0625    , 0.625 , -0.25     ], # noqa: E501
-    'axis_a':       [0.720  , 0.69  , 0.6624    , 0.6524    , 0.41  , 0.31  , 0.210     , 0.046     , 0.046     , 0.046     , 0.046     , 0.023     , 0.056     , 0.056 , 0.2       ], # noqa: E501
-    'axis_b':       [0.95   , 0.92  , 0.874     , 0.864     , 0.16  , 0.11  , 0.25      , 0.046     , 0.023     , 0.023     , 0.046     , 0.023     , 0.04      , 0.056 , 0.03      ], # noqa: E501
-    'axis_c':       [0.93   , 0.9   , 0.88      , 0.87      , 0.21  , 0.22  , 0.35      , 0.046     , 0.02      , 0.02      , 0.046     , 0.023     , 0.1       , 0.1   , 0.1       ], # noqa: E501
-    'angle':        [0.0    , 0.0   , 0.0       , 0.0       , -72.0 , 72.0  , 0.0       , 0.0       , 0.0       , -90.0     , 0.0       , 0.0       , -90.0     , 0.0   , 70.0      ], # noqa: E501
-    'type':       ['scalp', 'bone','csf'      , 'gray'    , 'csf' , 'csf' , 'white'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   , 'csf' , 'clot'    ], # noqa: E501
+    'center_x':     [0.00   , 0.00  , 0.00      , 0.00      , -0.22 , 0.22  , 0.00      , 0.0       , -0.08     , 0.06      , 0.0       , 0.00      , 0.06      , 0.00   , 0.56      ], # noqa: E501
+    'center_y':     [0.00   , 0.00  , -0.0184   , -0.0184   , 0.000 , 0.00  , 0.35      , 0.1       , -0.605    , -0.605    , -0.10     , -0.605    , -0.105    , 0.1    , -0.4      ], # noqa: E501
+    'center_z':     [0.00   , 0.00  , 0.00      , 0.0000    , -0.25 , -0.25 , -0.25     , -0.25     , -0.25     , -0.25     , -0.25     , -0.25     , 0.0625    , 0.625  , -0.25     ], # noqa: E501
+    'axis_a':       [0.720  , 0.69  , 0.6624    , 0.6524    , 0.41  , 0.31  , 0.210     , 0.046     , 0.046     , 0.046     , 0.046     , 0.023     , 0.056     , 0.056  , 0.2       ], # noqa: E501
+    'axis_b':       [0.95   , 0.92  , 0.874     , 0.864     , 0.16  , 0.11  , 0.25      , 0.046     , 0.023     , 0.023     , 0.046     , 0.023     , 0.04      , 0.056  , 0.03      ], # noqa: E501
+    'axis_c':       [0.93   , 0.9   , 0.88      , 0.87      , 0.21  , 0.22  , 0.35      , 0.046     , 0.02      , 0.02      , 0.046     , 0.023     , 0.1       , 0.1    , 0.1       ], # noqa: E501
+    'angle':        [0.0    , 0.0   , 0.0       , 0.0       , 72.0 , -72.0  , 0.0       , 0.0       , 0.0       , -90.0     , 0.0       , 0.0       , -90.0     , 0.0    , 70.0      ], # noqa: E501
+    'type':         ['scalp', 'bone','csf'      , 'gray'    , 'csf' , 'csf' , 'white'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   , 'csf'  , 'clot'    ], # noqa: E501
 })
 
 Ellipsoids_2D = pd.DataFrame({
@@ -810,7 +854,7 @@ Ellipsoids_2D = pd.DataFrame({
 })
 
 Tissue_params = pd.DataFrame({
-    'spin_density':     [0.8      , 0.12      , 0.98  , 0.85  , 0.745 , 0.617 , 0.95],  # noqa: E501
+    'spin_density':     [8000     , 1200      , 9800  , 8500  , 7450  , 6170  , 9500],  # noqa: E501
     't1_fitA':          [0.324    , 0.533     , None  , 1.35  , 0.857 , 0.583 , 0.926],  # noqa: E501
     't1_fitC':          [0.137    , 0.088     , None  , 0.34  , 0.376 , 0.382 , 0.217],  # noqa: E501
     't2':               [0.07     , 0.05      , 1.99  , 0.2   , 0.1   , 0.08  , 0.1],  # noqa: E501

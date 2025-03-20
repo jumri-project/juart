@@ -124,6 +124,10 @@ class Coil:
         S : (num_channels, Nx, Ny, Nz) complex ndarray
             Coil sensitivity maps for `num_channels` of the coil object.
         """
+        # TODO1 : This should just loop through the coil loops
+        # and get the coil sensitivities from there.
+        # To do so implement TOD01.1
+
         # Get vectorized sample locations
         x, y, z = [np.linspace(-fov[i] / 2, fov[i] / 2, matrix[i]) for i in range(3)]
         grid = np.meshgrid(x, y, z, indexing="ij")
@@ -147,7 +151,7 @@ class Coil:
         L: Optional[List[int]] = None,
         verbose=0,
     ) -> np.ndarray:
-        """_summary_
+        """Get coil sensitivity coefficients in kspace for grid location L in kspace.
 
         Parameters
         ----------
@@ -163,9 +167,12 @@ class Coil:
 
         Returns
         -------
-        np.ndarray, Shape (num_channels, *matrix)
+        sens_coeff : np.ndarray, Shape (num_channels, *L)
             Coil coefficients in kspace.
         """
+        # TODO2 : This should just loop through the
+        # coil loops and get the coil sensitivities
+        # To do so implement TODO2.1
         matrix = np.asarray(matrix)
         fov = np.asarray(fov)
 
@@ -186,8 +193,8 @@ class Coil:
 
         kmax = 1 / (2 * fov) * L // 2
 
-        x, y, z = [np.linspace(-kmax[i] / 2, kmax[i] / 2, L[i]) for i in range(3)]
-        ksp_grid = np.meshgrid(x, y, z, indexing="ij")
+        kx, ky, kz = [np.linspace(-kmax[i] / 2, kmax[i] / 2, L[i]) for i in range(3)]
+        ksp_grid = np.meshgrid(kx, ky, kz, indexing="ij")
 
         # Vectorize the grid in kspace
         k_3d = np.stack(
@@ -317,11 +324,14 @@ class CoilLoop:
 
         return S
 
-    # TODO why not also create a function to get the coil sensitivity maps?
+    # TODO1.1 why not also create a function to get the coil sensitivity maps?
 
-    # TODO why not also create a function to get coil sens in kspace?
+    # TODO2.1 why not also create a function to get coil sens in kspace?
 
-    # TODO Let Coil just call the upper todos for each channel
+    # TODO Let Coil just call the upper todos and looping through the coil channels
+    # This would shift the complexity
+    # to the CoilLoop class (because thats where the sensitivitites come from)
+    # and make the Coil class more readable and easier to understand
 
 
 def _fit_coil_sens(
