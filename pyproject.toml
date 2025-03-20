@@ -28,6 +28,7 @@ dependencies = [
     "numpy",
     "s3fs",
     "scikit-image",
+    "scipy",
     "threadpoolctl",
     "torch>=2.0.0",
     "tqdm",
