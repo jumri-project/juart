@@ -14,7 +14,10 @@ from ..parim.gcc import (
     apply_geometric_coil_compression,
     geometric_coil_compression_matrices,
 )
-from .aux import espirit_sense, sake_espirit
+from ..recon.grappa import grappa
+
+# from .aux import espirit_sense, sake_espirit
+from .aux import sake_espirit
 
 # Global variables that the worker processes will access.
 # These are set via the worker_init function.
@@ -196,28 +199,31 @@ class KSpaceData:
             dtype=shared_kdata_dtype,
         ).reshape(shared_kdata_shape)
 
-        # NAcl = 32
-        NUsf = 2
+        # WIP
+        #
+        # NUsf = 2
+        #
+        # partition_mask = torch.zeros((NPar,), dtype=torch.float32)
+        # partition_mask[::NUsf] = 1
+        # partition_mask[(NPar - NAcl) // 2 : (NPar + NAcl) // 2] = 1
+        # partition_mask = partition_mask[None, None, None, :, None, None, None]
+        #
+        # kdata_tmp = kdata[:, :, ILin : ILin + 1, :, :,
+        # .                  ISet : ISet + 1, IEco : IEco + 1]
+        #
+        # # Now swap line and partition dimension
+        # partition_mask = partition_mask.swapaxes(2, 3)
+        # kdata_tmp = kdata_tmp.swapaxes(2, 3)
+        # kdata_tmp = espirit_sense(kdata_tmp, partition_mask)
+        # # Swap back
+        # kdata_tmp = kdata_tmp.swapaxes(2, 3)
+        #
+        # kdata[:, :, ILin : ILin + 1, :, :,
+        # .      ISet : ISet + 1, IEco : IEco + 1] = kdata_tmp
 
-        partition_mask = torch.zeros((NPar,), dtype=torch.float32)
-        partition_mask[::NUsf] = 1
-        partition_mask[(NPar - NAcl) // 2 : (NPar + NAcl) // 2] = 1
-        partition_mask = partition_mask[None, None, None, :, None, None, None]
-
-        kdata_tmp = kdata[:, :, ILin : ILin + 1, :, :, ISet : ISet + 1, IEco : IEco + 1]
-
-        # Now swap line and partition dimension
-        partition_mask = partition_mask.swapaxes(2, 3)
-        kdata_tmp = kdata_tmp.swapaxes(2, 3)
-        kdata_tmp = espirit_sense(kdata_tmp, partition_mask)
-        # Swap back
-        kdata_tmp = kdata_tmp.swapaxes(2, 3)
-
-        kdata[:, :, ILin : ILin + 1, :, :, ISet : ISet + 1, IEco : IEco + 1] = kdata_tmp
-
-        # kdata[:, :, ILin, :, 0, ISet, IEco] = grappa(
-        #     kdata[:, :, ILin, :, 0, ISet, IEco], NAcl, kernel_size=(5, 5), coil_axis=0
-        # )
+        kdata[:, :, ILin, :, 0, ISet, IEco] = grappa(
+            kdata[:, :, ILin, :, 0, ISet, IEco], NAcl, kernel_size=(5, 5), coil_axis=0
+        )
 
     def apply_mask(self, NUsf, NAcl, is_pulseq=False):
         NCha, NCol, NLin, NPar, NSli, NSet, NEco = self.kdata_shape
