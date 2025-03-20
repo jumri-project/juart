@@ -1,7 +1,7 @@
 {
   "name": "Dev Container",
   "build": {
-    "dockerfile": "Dockerfile",
+    "dockerfile": "conda/Dockerfile",
     "context": ".."
   },
   "features": {},
@@ -20,7 +20,6 @@
     "--userns=keep-id"
   ],
   "mounts": [
-    "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/host-home-folder,type=bind",
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.aws,target=/root/.aws,type=bind"
   ],
   "postCreateCommand": "sh .devcontainer/post-create.sh"

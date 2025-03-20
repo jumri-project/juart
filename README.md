@@ -155,3 +155,9 @@ To prevent this issue, we use the following setting in `devcontainer.json`:
 ```
 
 For more details, see the related discussion: [VS Code Remote Issue #1134](https://github.com/microsoft/vscode-remote-release/issues/1134).
+
+## Third-Party Licenses
+
+This project uses third-party software. The licenses for these dependencies are included in the `THIRD_PARTY_LICENSES.txt` file.
+
+- [Third-Party Licenses](THIRD_PARTY_LICENSES.txt)
