@@ -8,17 +8,19 @@ from juart.conopt.functional.fourier import (
 
 
 class TestFourierTransformAdjoint:
+    num_channels = 8
+
     @pytest.mark.parametrize(
         "dim, shape, expected_shape",
         [
-            (1, (20,), (1, 20, 1, 1)),
-            (2, (20, 20), (1, 20, 20, 1)),
-            (3, (20, 20, 20), (1, 20, 20, 20)),
+            (1, (20,), (num_channels, 20, 1, 1)),
+            (2, (20, 20), (num_channels, 20, 20, 1)),
+            (3, (20, 20, 20), (num_channels, 20, 20, 20)),
         ],
     )
     def test_fourier_transform_adjoint_same_nodes(self, dim, shape, expected_shape):
         k = torch.rand(dim, 100, dtype=torch.float32) - 0.5
-        x = torch.rand(100, dtype=torch.complex64)
+        x = torch.rand(self.num_channels, 100, dtype=torch.complex64)
         n_modes = shape
 
         result = nonuniform_fourier_transform_adjoint(k=k, x=x, n_modes=n_modes)
@@ -27,18 +29,51 @@ class TestFourierTransformAdjoint:
         assert result.dtype == torch.complex64
 
     @pytest.mark.parametrize(
-        "k_shape, channels, nodes, expected_shape",
+        "k_shape, nodes, expected_shape",
         [
-            ((1, 1000, 5, 3, 2), 5, (20,), (5, 20, 1, 1, 5, 3, 2)),
-            ((2, 1000, 5, 3, 2), 5, (20, 20), (5, 20, 20, 1, 5, 3, 2)),
-            ((3, 1000, 5, 3, 2), 5, (20, 20, 20), (5, 20, 20, 20, 5, 3, 2)),
+            ((1, 1000, 5, 3, 2), (20,), (num_channels, 20, 1, 1, 5, 3, 2)),
+            ((2, 1000, 5, 3, 2), (20, 20), (num_channels, 20, 20, 1, 5, 3, 2)),
+            ((3, 1000, 5, 3, 2), (20, 20, 20), (num_channels, 20, 20, 20, 5, 3, 2)),
         ],
     )
-    def test_fourier_transform_adjoint_add_axes(
-        self, k_shape, channels, nodes, expected_shape
+    def test_fourier_transform_adjoint_add_axes(self, k_shape, nodes, expected_shape):
+        k = torch.rand(*k_shape, dtype=torch.float32) - 0.5
+        x = torch.rand(self.num_channels, *k_shape[1:], dtype=torch.complex64)
+        n_modes = nodes
+
+        result = nonuniform_fourier_transform_adjoint(k=k, x=x, n_modes=n_modes)
+
+        assert result.shape == expected_shape
+        assert result.dtype == torch.complex64
+
+    @pytest.mark.parametrize(
+        "k_shape, x_shape, nodes, expected_shape",
+        [
+            (
+                (1, 1000, 5, 3),
+                (num_channels, 1000, 5, 3, 4, 2),
+                (20,),
+                (num_channels, 20, 1, 1, 5, 3, 4, 2),
+            ),
+            (
+                (2, 1000, 5, 3),
+                (num_channels, 1000, 5, 3, 4, 2),
+                (20, 20),
+                (num_channels, 20, 20, 1, 5, 3, 4, 2),
+            ),
+            (
+                (3, 1000, 5, 3),
+                (num_channels, 1000, 5, 3, 4, 2),
+                (20, 20, 20),
+                (num_channels, 20, 20, 20, 5, 3, 4, 2),
+            ),
+        ],
+    )
+    def test_fourier_transform_adjoint_more_x_than_k(
+        self, k_shape, x_shape, nodes, expected_shape
     ):
         k = torch.rand(*k_shape, dtype=torch.float32) - 0.5
-        x = torch.rand(channels, *k_shape[1:], dtype=torch.complex64)
+        x = torch.rand(*x_shape, dtype=torch.complex64)
         n_modes = nodes
 
         result = nonuniform_fourier_transform_adjoint(k=k, x=x, n_modes=n_modes)
@@ -70,18 +105,21 @@ class TestFourierTransformAdjoint:
 
 
 class TestFourierTransformForward:
+    num_channels = 8
+    num_columns = 1000
+
     # Test for no additional axes, only channels, read, phase1, phase2
     @pytest.mark.parametrize(
-        "dim, num_col, shape, expected_shape",
+        "k_shape, x_shape, expected_shape",
         [
-            (1, 10000, (5, 20, 1, 1), (5, 10000)),
-            (2, 10000, (5, 20, 20, 1), (5, 10000)),
-            (3, 10000, (5, 20, 20, 20), (5, 10000)),
+            ((1, num_columns), (num_channels, 20, 1, 1), (num_channels, num_columns)),
+            ((2, num_columns), (num_channels, 20, 20, 1), (num_channels, num_columns)),
+            ((3, num_columns), (num_channels, 20, 20, 20), (num_channels, num_columns)),
         ],
     )
-    def test_fourier_transform_forward_noadd(self, dim, num_col, shape, expected_shape):
-        k = torch.rand(dim, num_col, dtype=torch.float32) - 0.5
-        x = torch.rand(shape, dtype=torch.complex64)
+    def test_fourier_transform_forward_noadd(self, k_shape, x_shape, expected_shape):
+        k = torch.rand(k_shape, dtype=torch.float32) - 0.5
+        x = torch.rand(x_shape, dtype=torch.complex64)
 
         result = nonuniform_fourier_transform_forward(k=k, x=x)
 
@@ -90,16 +128,28 @@ class TestFourierTransformForward:
 
     # Test for additional axes
     @pytest.mark.parametrize(
-        "dim, num_col, shape, expected_shape",
+        "k_shape, x_shape, expected_shape",
         [
-            (1, 10000, (5, 20, 1, 1, 4, 2, 1), (5, 10000, 4, 2, 1)),
-            (2, 10000, (5, 20, 20, 1, 4, 2, 1), (5, 10000, 4, 2, 1)),
-            (3, 10000, (5, 20, 20, 20, 4, 2, 1), (5, 10000, 4, 2, 1)),
+            (
+                (1, num_columns, 4, 2, 1),
+                (num_channels, 20, 1, 1, 4, 2, 1),
+                (num_channels, num_columns, 4, 2, 1),
+            ),
+            (
+                (2, num_columns, 4, 2, 1),
+                (num_channels, 20, 20, 1, 4, 2, 1),
+                (num_channels, num_columns, 4, 2, 1),
+            ),
+            (
+                (3, num_columns, 4, 2, 1),
+                (num_channels, 20, 20, 20, 4, 2, 1),
+                (num_channels, num_columns, 4, 2, 1),
+            ),
         ],
     )
-    def test_fourier_transform_forward_add(self, dim, num_col, shape, expected_shape):
-        k = torch.rand(dim, num_col, *shape[4:], dtype=torch.float32) - 0.5
-        x = torch.rand(shape, dtype=torch.complex64)
+    def test_fourier_transform_forward_add_axes(self, k_shape, x_shape, expected_shape):
+        k = torch.rand(k_shape, dtype=torch.float32) - 0.5
+        x = torch.rand(x_shape, dtype=torch.complex64)
 
         result = nonuniform_fourier_transform_forward(k=k, x=x)
 
