@@ -41,6 +41,37 @@ def process_siemens_file(fname):
     return process
 
 
+def process_siemens_folder(folder):
+    # Find all *.dat files in the input diretcory
+
+    for root, dirnames, filenames in os.walk(folder):
+        for filename in filenames:
+            if filename.endswith((".dat", ".DAT")):
+                # Define input and output files
+                input_file = os.path.join(root, filename)
+                output_file = os.path.splitext(input_file)[0] + ".h5"
+
+                # Run the external command and stream the output
+                if not os.path.isfile(output_file):
+                    command = [
+                        "siemens_to_ismrmrd",
+                        "-f",
+                        input_file,
+                        "-o",
+                        output_file,
+                    ]
+                    process = subprocess.run(
+                        command, check=True, stdout=None, stderr=None
+                    )
+                else:
+                    print("Skipping file {} as it already exists.".format(output_file))
+                    process = 0
+
+    return process
+
+    return True
+
+
 def sake_espirit(
     kdata,
     ktraj,

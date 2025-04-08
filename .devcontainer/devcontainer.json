@@ -16,9 +16,6 @@
   },
   "remoteUser": "root",
   "updateRemoteUserUID": true,
-  "runArgs": [
-    "--userns=keep-id"
-  ],
   "mounts": [
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.aws,target=/root/.aws,type=bind"
   ],

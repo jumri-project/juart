@@ -9,10 +9,9 @@ RUN apt-get update \
     # build-essential is required to pip install finufft
     # && apt-get install -y --no-install-recommends \
     && apt-get install -y \
-        build-essential \
-        ssh \
-        libfftw3-dev \
-        pkg-config \
+    build-essential \
+    ssh \
+    \
     && apt-get autoremove -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
