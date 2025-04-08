@@ -70,7 +70,7 @@ class Coil:
         self.num_channels = len(self.coil_loops)
 
     @property
-    def coil_channel_posititons(self):
+    def coil_channel_positions(self):
         """Get the coil channel positions."""
         return np.array([coil.r_cent for coil in self.coil_loops])
 
@@ -107,40 +107,28 @@ class Coil:
 
         return S
 
-    def get_coil_sens_maps(self, matrix: npt.ArrayLike, fov: npt.ArrayLike, verbose=0):
-        """Simulates coil sensitivity maps for the coil object as cartesian maps.
+    def get_sens_maps(self, matrix: npt.ArrayLike, fov: npt.ArrayLike, verbose=0):
+        """Simulates coil sensitivity map.
 
         Parameters
         ----------
-        matrix : np.ndarray, (3, )
-            Matrix size (Nx, Ny, Nz) for the coil sensitivity maps.
-        fov : np.ndarray, (3, )
-            Field of view (FOVx, FOVy, FOVz) of the coil sensitivity maps.
-        verbose: int
-            If 1, print the time taken to simulate coil sensitivity maps.
+        matrix : np.ndarray, (D,)
+            Matrix size for the coil sensitivity map in D dimensions.
+        fov : np.ndarray, (D, )
+            Field of view of the coil sensitivity map in D dimensions.
 
         Returns
         -------
-        S : (num_channels, Nx, Ny, Nz) complex ndarray
-            Coil sensitivity maps for `num_channels` of the coil object.
+        S : (self.num_channels, Nx, Ny, Nz) complex ndarray
+            Coil sensitivity map for the coil object.
+            If D=2, shape is (self.num_channels, Nx, Ny, 1).
+            If D=3, shape is (self.num_channels, Nx, Ny, Nz).
         """
-        # TODO1 : This should just loop through the coil loops
-        # and get the coil sensitivities from there.
-        # To do so implement TOD01.1
 
-        # Get vectorized sample locations
-        x, y, z = [np.linspace(-fov[i] / 2, fov[i] / 2, matrix[i]) for i in range(3)]
-        grid = np.meshgrid(x, y, z, indexing="ij")
-
-        r_3d = np.stack(
-            [grid[0].flatten(), grid[1].flatten(), grid[2].flatten()], axis=0
-        )
-
-        # Get coil sensitivities
-        sensitivities = self.get_coil_sens(r_3d, verbose=verbose)
-
-        # Reshape back to grid
-        sens_maps = sensitivities.reshape((self.num_channels, *matrix))
+        sens_maps = []
+        for n_cha in range(self.num_channels):
+            sens_maps.append(self.coil_loops[n_cha].get_sensitivity_map(matrix, fov))
+        sens_maps = np.concatenate(sens_maps, axis=0)
 
         return sens_maps
 
@@ -323,6 +311,54 @@ class CoilLoop:
         # S /= np.max(np.abs(S))
 
         return S
+
+    def get_sensitivity_map(
+        self,
+        matrix: npt.ArrayLike,
+        fov: npt.ArrayLike,
+    ) -> np.ndarray:
+        """Simulates coil sensitivity map.
+
+        Parameters
+        ----------
+        matrix : np.ndarray, (D,)
+            Matrix size for the coil sensitivity map in D dimensions.
+        fov : np.ndarray, (D, )
+            Field of view of the coil sensitivity map in D dimensions.
+
+        Returns
+        -------
+        S : (1, Nx, Ny, Nz) complex ndarray
+            Coil sensitivity map for the coil object.
+            If D=2, shape is (1, Nx, Ny, 1).
+            If D=3, shape is (1, Nx, Ny, Nz).
+        """
+        matrix = list(matrix)
+        fov = list(fov)
+
+        if len(matrix) < 3:
+            matrix = matrix + [1] * (3 - len(matrix))
+        if len(fov) < 3:
+            fov = fov + [0] * (3 - len(fov))
+
+        # Get vectorized sample locations
+        x, y, z = [np.linspace(-fov[i] / 2, fov[i] / 2, matrix[i]) for i in range(3)]
+        grid = np.meshgrid(x, y, z, indexing="ij")
+
+        r_3d = np.stack(
+            [grid[0].flatten(), grid[1].flatten(), grid[2].flatten()], axis=0
+        )
+
+        # Get coil sensitivities
+        sensitivities = self.get_sensitivity(r_3d)
+
+        # Reshape back to grid
+        sens_map = sensitivities.reshape((1, *matrix))
+
+        # Scale to max
+        sens_map /= np.max(np.abs(sens_map))
+
+        return sens_map
 
     # TODO1.1 why not also create a function to get the coil sensitivity maps?
 
