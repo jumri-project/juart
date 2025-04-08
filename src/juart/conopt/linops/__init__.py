@@ -6,11 +6,14 @@ import torch
 
 class LinearOperator:
     """
-    Common interface for performing matrix-vector products using PyTorch.
+    A common interface for performing matrix-vector products using PyTorch.
 
-    This class defines methods for matrix-vector and matrix-matrix products, along with
-    operator overloading for common linear algebraic operations. Subclasses can define
-    specific behavior for custom matrix-like objects.
+    This class provides methods for matrix-vector and matrix-matrix products, along with
+    operator overloading for common linear algebra operations. Subclasses can implement
+    specific behaviors for custom matrix-like objects.
+
+    This class is inspired by the `scipy.sparse.linalg.LinearOperator` class, with numpy
+    calls replaced by their PyTorch equivalents.
     """
 
     ndim = 2

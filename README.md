@@ -122,6 +122,20 @@ To verify if the pre-commit hook is active, run:
 ls -l .git/hooks/pre-commit
 ```
 
+### Sharing S3 Credentials with the Container
+
+To authenticate with an S3 storage, you need to create a folder on the host machine containing the corresponding credentials. This folder should be located at `~/.aws/credentials`.
+
+The credentials file should be formatted as follows:
+
+```
+[default]
+aws_access_key_id = YOUR_ACCESS_KEY_ID
+aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
+```
+
+Replace `YOUR_ACCESS_KEY_ID` and `YOUR_SECRET_ACCESS_KEY` with your actual AWS credentials.
+
 ## Issues
 
 ### Files Showing as Modified in Git
@@ -142,4 +156,8 @@ To prevent this issue, we use the following setting in `devcontainer.json`:
 
 For more details, see the related discussion: [VS Code Remote Issue #1134](https://github.com/microsoft/vscode-remote-release/issues/1134).
 
-pip install --root-user-action=ignore -e . && 
+## Third-Party Licenses
+
+This project uses third-party software. The licenses for these dependencies are included in the `THIRD_PARTY_LICENSES.txt` file.
+
+- [Third-Party Licenses](THIRD_PARTY_LICENSES.txt)

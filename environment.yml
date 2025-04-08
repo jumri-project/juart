@@ -1,0 +1,21 @@
+channels:
+  - conda-forge
+dependencies:
+  - h5py
+  - ipykernel
+  - ipympl
+  - ipywidgets
+  - matplotlib
+  - numpy
+  - pip
+  - pre-commit
+  - ruff
+  - s3fs
+  - scikit-image
+  - threadpoolctl
+  - tqdm
+  - zarr
+  - pip:
+    - finufft
+    - ismrmrd
+    - torch>=2.0.0
