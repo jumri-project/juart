@@ -261,7 +261,8 @@ def nonuniform_fourier_transform_forward(
     # Reshape flattened additional axes
     y = y.reshape(*shared_axes, *excl_axes, N)
 
-    # move channel and column axes to the front (C, N, [shared_axes], [excl_axes])
+    # move channel and column axes to the front
+    # to get (C, N, [shared_axes], [excl_axes])
     y = y.moveaxis((-2, -1), (0, 1))
 
     # Remove the added axis if there are no additional

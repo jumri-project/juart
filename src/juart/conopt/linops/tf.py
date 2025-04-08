@@ -111,7 +111,7 @@ class OversampledTransferFunctionNormalOperator(LinearOperator):
         self,
         transfer_function: torch.Tensor,
         input_shape: Tuple[int, ...],
-        nonuniform_axes: Tuple[int, ...] = (1, 2),
+        nonuniform_axes: Tuple[int, ...] = (1, 2, 3),
         device: Optional[torch.device] = None,
     ):
         """
@@ -124,12 +124,12 @@ class OversampledTransferFunctionNormalOperator(LinearOperator):
         input_shape : tuple of int
             Shape of the input tensor (nC, nX, nY, nZ, nS, nTI, nTE).
         nonuniform_axes : tuple of int, optional
-            Axes along which the transfer function is applied (default is (1, 2)).
+            Axes along which the transfer function is applied (default is (1, 2, 3)).
         """
-        nC, nX, nY, nZ, nS, nTI, nTE = input_shape
+        # nC, nX, nY, nZ, nS, nTI, nTE = input_shape
 
-        self.forward_shape = (nC, nX, nY, nZ, nS, nTI, nTE)
-        self.adjoint_shape = (nC, nX, nY, nZ, nS, nTI, nTE)
+        self.forward_shape = input_shape
+        self.adjoint_shape = input_shape
 
         self.nonuniform_axes = nonuniform_axes
 
