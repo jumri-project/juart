@@ -139,6 +139,8 @@ def nufft2d_type2(
 def nonuniform_fourier_transform_forward(
     k: torch.Tensor,
     x: torch.Tensor,
+    modeord: int = 0,
+    isign: int = 1,
     device: Optional[torch.DeviceObjType] = None,
     **finufftkwargs,
 ) -> torch.Tensor:
@@ -180,10 +182,10 @@ def nonuniform_fourier_transform_forward(
             x = x.to(device)
 
     # Ensure that the input kspace locations have correct scaling
-    if torch.any(torch.abs(k) > 0.5):
-        raise ValueError(
-            "Non-uniform sampling points k must be scaled between -0.5 and 0.5."
-        )
+    # if torch.any(torch.abs(k) > 0.5):
+    #     raise ValueError(
+    #         "Non-uniform sampling points k must be scaled between -0.5 and 0.5."
+    #     )
 
     # Ensure x has at least shape (C, R, P1, P2)
     if x.ndim < 4:
@@ -251,6 +253,8 @@ def nonuniform_fourier_transform_forward(
     y = torch.vmap(
         partial(
             finufft_type2,
+            modeord=modeord,
+            isign=isign,
             **finufftkwargs,
         ),
         in_dims=0,
@@ -277,6 +281,8 @@ def nonuniform_fourier_transform_adjoint(
     k: torch.Tensor,
     x: torch.Tensor,
     n_modes: Union[Tuple[int], Tuple[int, int], Tuple[int, int, int]],
+    modeord: int = 0,
+    isign: int = 1,
     device: Optional[torch.DeviceObjType] = None,
     **finufftkwargs,
 ) -> torch.Tensor:
@@ -317,10 +323,10 @@ def nonuniform_fourier_transform_adjoint(
             )
             x = x.to(device)
 
-    if torch.max(torch.abs(k)) > 0.5:
-        raise ValueError(
-            "Non-uniform sampling points k must be scaled between -0.5 and 0.5."
-        )
+    # if torch.max(torch.abs(k)) > 0.5:
+    #     raise ValueError(
+    #         "Non-uniform sampling points k must be scaled between -0.5 and 0.5."
+    #     )
 
     if k.shape[0] != len(n_modes):
         raise ValueError(
@@ -395,6 +401,8 @@ def nonuniform_fourier_transform_adjoint(
         partial(
             finufft_type1,
             output_shape=n_modes,
+            modeord=modeord,
+            isign=isign,
             **finufftkwargs,
         ),
         in_dims=0,

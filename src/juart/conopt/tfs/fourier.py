@@ -12,7 +12,6 @@ def nonuniform_transfer_function(
     k: torch.Tensor,
     data_shape: Tuple[int, ...],
     oversampling: Tuple[int, ...] = 2,
-    eps: int = 1e-6,
 ) -> torch.Tensor:
     """
     Compute the non-uniform transfer function using PyTorch.
@@ -69,7 +68,7 @@ def nonuniform_transfer_function(
 
     # Compute the Point-Spread Function (PSF) using the non-uniform adjoint Fourier
     # transform for the dimensions where k changes
-    PSF = nonuniform_fourier_transform_adjoint(k, x, n_modes, eps=eps, modeord=0)
+    PSF = nonuniform_fourier_transform_adjoint(k, x, n_modes)
 
     # Add the additioal dimensions of the output
     new_axes = PSF.shape + (1,) * len(excl_axes_x)
