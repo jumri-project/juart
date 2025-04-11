@@ -721,7 +721,7 @@ class SheppLogan:
         -------
         signal_obj : torch.tensor, Shape (*grid_size, E)
             Signal object for the ellipsoid on the grid with E echoes.
-            E is definded by the number of echo times `te` in `seq_params`.
+            E is defined by the number of echo times `te` in `seq_params`.
             If `seq_params` is None, E=1.
         seq_params: dict, optional
             Sequence parameters, by default each ellipsoids signal
