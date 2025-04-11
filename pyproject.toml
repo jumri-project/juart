@@ -26,6 +26,7 @@ dependencies = [
     "ismrmrd",
     "matplotlib",
     "numpy",
+    "pytorch-finufft",
     "s3fs",
     "scikit-image",
     "scipy",
@@ -39,8 +40,11 @@ dependencies = [
 dev = [
     "pre-commit",
     "ruff",
+    "pytest",
 ]
-test = []
+test = [
+
+]
 
 [project.urls]
 homepage = "https://github.com/inm-4/juart"

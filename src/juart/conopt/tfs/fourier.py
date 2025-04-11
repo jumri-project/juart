@@ -10,8 +10,8 @@ from ..functional.fourier import (
 
 def nonuniform_transfer_function(
     k: torch.Tensor,
-    shape: Tuple[int, ...],
-    oversampling: int = 2,
+    data_shape: Tuple[int, ...],
+    oversampling: Tuple[int, ...] = 2,
     eps: int = 1e-6,
 ) -> torch.Tensor:
     """
@@ -20,50 +20,64 @@ def nonuniform_transfer_function(
     Parameters
     ----------
     k : torch.Tensor
-        The k-space trajectory.
-    shape : tuple of ints
-        The shape of the data.
+        The k-space trajectory of shape (D, N, ...)
+        with D dimensions (kx,ky,kz) and N columns.
+    data_shape : tuple of ints
+        The shape of the complex data tensor of format (1, R, P1, P2, ...).
     oversampling : int or tuple of ints, optional
-        The oversampling factors along each axis.
+        The oversampling factors along each axis
+        (eg. (OS_R,), (OS_R, OS_P1), (OS_R, OS_P1, OS_P2)).
+        If an integer is provided,
+        it is used for all axes (R, P1, P2)>1 in `data_shape`.
+        Default is 2.
     eps : float, optional
         The error tolerance for the NUFFT adjoint operation.
 
     Returns
     -------
     transfer_function : torch.Tensor
-        The transfer function.
+        The transfer function with
+         oversampled data_shape (1, OS_R*R, OS_P1*P1, OS_P2*P2, ...).
     """
 
-    nX, nY, nZ, nS, nTI, nTE, nK = shape
+    _, nX, nY, nZ, *add_axes_x = data_shape
+    nDim, nCol, *add_axes_k = k.shape
 
-    if k.shape[0] == 2:
-        axis = (1, 2)
-        nXs = oversampling[0] * nX
-        nYs = oversampling[1] * nY
-        nZs = nZ
+    excl_axes_x = add_axes_x[len(add_axes_k) :]
+    n_modes = tuple([n for n in [nX, nY, nZ] if n > 1])
 
-    elif k.shape[0] == 3:
-        axis = (1, 2, 3)
-        nXs = oversampling[0] * nX
-        nYs = oversampling[1] * nY
-        nZs = oversampling[2] * nZ
+    if len(n_modes) != nDim:
+        raise ValueError(
+            "The number of spacial encoding dimensions (R, P1, P2)"
+            " in data_shape must match the number of dimensions in k."
+        )
 
-    norm = 1 / torch.prod(torch.tensor(oversampling, dtype=torch.float32))
+    # Apply oversampling
+    if isinstance(oversampling, int):
+        oversampling = (oversampling,) * len(n_modes)
+    elif len(oversampling) != len(n_modes):
+        raise ValueError(
+            "Oversampling must be an integer or a tuple with length equal to the "
+            "number of spacial encoding dimensions (R, P1, P2) in data_shape."
+        )
+    n_modes = tuple([n * o for n, o in zip(n_modes, oversampling)])
 
     # Create normalized input array (PyTorch tensor)
-    x = (
-        torch.ones((1, 1, 1, nK, nS, nTI, nTE), dtype=torch.complex64, device=k.device)
-        / norm
-    )
+    norm = 1 / torch.prod(torch.tensor(oversampling, dtype=torch.float32))
+    x = torch.ones((1, nCol, *add_axes_k), dtype=torch.complex64, device=k.device)
+    x = x / norm
 
     # Compute the Point-Spread Function (PSF) using the non-uniform adjoint Fourier
-    # transform
-    PSF = nonuniform_fourier_transform_adjoint(
-        k, x, (nXs, nYs, nZs), (1, nXs, nYs, nZs, nS, nTI, nTE), eps=eps
-    )
+    # transform for the dimensions where k changes
+    PSF = nonuniform_fourier_transform_adjoint(k, x, n_modes, eps=eps, modeord=0)
 
-    # Compute the transfer function (transfer_function) using the forward Fourier
-    # transform
-    transfer_function = fourier_transform_forward(PSF, axis)
+    # Add the additioal dimensions of the output
+    new_axes = PSF.shape + (1,) * len(excl_axes_x)
+    new_shape = PSF.shape + tuple(excl_axes_x)
+    PSF = PSF.reshape(new_axes).expand(new_shape)
+
+    # Compute the transfer function using the forward Fourier transform
+    fft_axes = tuple(range(1, len(n_modes) + 1))
+    transfer_function = fourier_transform_forward(PSF, fft_axes)
 
     return transfer_function
