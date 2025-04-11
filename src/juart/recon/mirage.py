@@ -7,7 +7,7 @@ from ..conopt.linops.composite import ConcatOperator, SumOperator
 from ..conopt.linops.hankel import BlockHankelNormalOperator, BlockHankelOperator
 from ..conopt.linops.identity import IdentityOperator
 from ..conopt.linops.shift import ShiftOperator
-from ..conopt.linops.tf import OversampledTransferFunctionNormalOperator
+from ..conopt.linops.tf import TransferFunctionOperator
 from ..conopt.linops.wavelet import WaveletTransformOperator
 from ..conopt.proxalgs.admm import ADMM
 from ..conopt.proxops.composite import SeparableProximalOperator
@@ -22,7 +22,6 @@ class MIRAGE(object):
         coil_sensitivities: torch.Tensor,
         regridded_data: torch.Tensor,
         transfer_function: torch.Tensor,
-        shape: Tuple[int, ...],
         lambda_wavelet: Optional[float] = 1e-3,
         lambda_hankel: Optional[float] = None,
         lambda_casorati: Optional[float] = None,
@@ -34,8 +33,9 @@ class MIRAGE(object):
         wavelet_type: str = "db4",
         wavelet_level: int = 4,
         casorati_window: Tuple[int, int] = (3, 3),
-        inner_iter: int = 5,
-        outer_iter: int = 500,
+        cg_maxiter: int = 5,
+        admm_maxiter: int = 500,
+        verbose: bool = True,
         callback: Optional[Callable] = None,
         device: Optional[torch.device] = None,
     ):
@@ -112,14 +112,13 @@ class MIRAGE(object):
         https://doi.org/10.1002/mrm.30272
         """
 
-        nX, nY, nZ, nS, nTI, nTE = shape
-        nC = coil_sensitivities.shape[0]  # Number of channels
+        num_channels = coil_sensitivities.shape[0]
+        shape = regridded_data.shape
 
         lin_ops = []
         lin_ops_normal = []
         prox_ops = []
 
-        # Define the channel operator
         channel_operator = ChannelOperator(
             coil_sensitivities,
             shape,
@@ -127,16 +126,14 @@ class MIRAGE(object):
             device=device,
         )
 
-        # Define the oversampled transfer function normal operator
-        transfer_function_operator = OversampledTransferFunctionNormalOperator(
+        transfer_function_operator = TransferFunctionOperator(
             transfer_function,
-            (nC, nX, nY, nZ, nS, nTI, nTE),
-            nonuniform_axes=(1, 2),
+            (num_channels,) + shape,
+            axes=(1, 2),
             device=device,
         )
 
         if lambda_wavelet is not None:
-            # Define the wavelet transform operator
             wavelet_operator = WaveletTransformOperator(
                 shape,
                 axes=(0, 1),
@@ -157,7 +154,6 @@ class MIRAGE(object):
             )
 
         if lambda_hankel is not None:
-            # Define the Block Hankel operator
             hankel_operator = BlockHankelOperator(shape, device=device)
             lin_ops.append(-weight_hankel * hankel_operator)
             lin_ops_normal.append(
@@ -170,7 +166,6 @@ class MIRAGE(object):
             )
 
         if lambda_casorati is not None:
-            # Define the shift (Casorati) operator
             casorati_operator = ShiftOperator(
                 casorati_window, (1, 1), (0, 1), shape, device=device
             )
@@ -182,8 +177,9 @@ class MIRAGE(object):
                 SingularValueSoftThresholdingOperator(
                     casorati_operator.adjoint_shape,
                     weight_casorati * lambda_casorati,
-                    (1, 2, 3, 4, 5, 6, 0),
-                    (nX, nY, nZ, nS, nTI, -1),
+                    # TODO: needs a fix
+                    # (1, 2, 3, 4, 5, 6, 0),
+                    # (nX, nY, nZ, nS, nTI, -1),
                 )
             )
 
@@ -207,7 +203,7 @@ class MIRAGE(object):
             channel_operator.H @ transfer_function_operator @ channel_operator,
             self.concatenated_operator,
             self.concatenated_normal_operator,
-            maxiter=inner_iter,
+            maxiter=cg_maxiter,
         )
 
         # Initialize the ADMM solver
@@ -217,8 +213,8 @@ class MIRAGE(object):
             self.identity_operator,
             self.concatenated_operator,
             self.constant,
-            maxiter=outer_iter,
-            verbose=True,
+            maxiter=admm_maxiter,
+            verbose=verbose,
             callback=callback,
             tau=tau,
             device=device,
