@@ -653,7 +653,7 @@ class SheppLogan:
             Default coil has 8 channels for 2D case and 15 channels for 3D case.
         """
         if coil is None:
-            r = torch.max(self.fov) / 2
+            r = torch.max(self.fov) / 2 + 0.05
             if self.ndim == 2:
                 z = 0
                 phi0 = 0
@@ -672,18 +672,24 @@ class SheppLogan:
 
             # Adjust coil shape to ellipsoid shape of phantom
             a, b = self.ellipsoids[0].geometry.axes[:2]
-            for cha in coil.coil_loops:
-                phi = np.arctan2(cha.r_cent[1], cha.r_cent[0])
+            for i in range(len(coil.coil_loops)):
+                phi = np.arctan2(
+                    coil.coil_loops[i].r_cent[1], coil.coil_loops[i].r_cent[0]
+                )
 
                 new_r = 3 / 2 * self.fov[0] + np.sqrt(
                     a * np.cos(phi) ** 2 + b * np.sin(phi) ** 2
                 )
 
-                cha.r_cent = np.array(
-                    [new_r * np.cos(phi), new_r * np.sin(phi), cha.r_cent[2]]
+                coil.coil_loops[i].r_cent = np.array(
+                    [
+                        new_r * np.cos(phi),
+                        new_r * np.sin(phi),
+                        coil.coil_loops[i].r_cent[2],
+                    ]
                 )
 
-                cha._build_coil_elements()
+                coil.coil_loops[i]._build_coil_elements()
 
             self.coil = coil
 
