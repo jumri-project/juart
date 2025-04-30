@@ -26,6 +26,8 @@ dependencies = [
     "ismrmrd",
     "matplotlib",
     "numpy",
+    "numba",
+    "pandas",
     "pytorch-finufft",
     "s3fs",
     "scikit-image",
