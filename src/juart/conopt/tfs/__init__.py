@@ -12,6 +12,44 @@ def apply_transfer_function(
     axes: Tuple[int, ...],
 ) -> torch.Tensor:
     """
+    Apply a transfer function in the Fourier domain using PyTorch.
+
+    This function takes an input tensor `x`, transforms it into the Fourier domain,
+    applies a given transfer function `transfer_function` in the Fourier space, and then
+    transforms the result back to the original domain.
+
+    Parameters:
+    ----------
+    x : torch.Tensor
+        The input tensor to which the transfer function is applied.
+    transfer_function : torch.Tensor
+        The transfer function to apply in the Fourier domain.
+    axes : tuple of ints
+        The axes along which the Fourier transform is applied.
+
+    Returns:
+    -------
+    torch.Tensor
+        The tensor after applying the transfer function in the Fourier domain.
+    """
+    # Perform forward Fourier transform
+    x = fourier_transform_forward(x, axes)
+
+    # Apply the transfer function
+    x = transfer_function * x
+
+    # Perform inverse Fourier transform
+    x = fourier_transform_adjoint(x, axes)
+
+    return x.clone()  # Clone to ensure memory continuity
+
+
+def apply_oversampled_transfer_function(
+    x: torch.Tensor,
+    transfer_function: torch.Tensor,
+    axes: Tuple[int, ...],
+) -> torch.Tensor:
+    """
     Apply an oversampled transfer function in the Fourier domain using PyTorch.
 
     This function first pads the input tensor `x` to match the size of the transfer
@@ -43,8 +81,7 @@ def apply_transfer_function(
         pad_shape[ax] = transfer_function.shape[ax]  # Adjust the padding size
 
     # Pad the input tensor to match the size of transfer_function
-    if pad_shape != shape:
-        x = pad_tensor(x, pad_shape)
+    x = pad_tensor(x, pad_shape)
 
     # Perform forward Fourier transform
     x = fourier_transform_forward(x, axes)
@@ -56,7 +93,6 @@ def apply_transfer_function(
     x = fourier_transform_adjoint(x, axes)
 
     # Crop back to the original shape
-    if pad_shape != shape:
-        x = crop_tensor(x, shape)
+    x = crop_tensor(x, shape)
 
     return x.clone()  # Clone to ensure memory continuity
