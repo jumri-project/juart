@@ -14,7 +14,7 @@ from ..conopt.tfs.fourier import nonuniform_transfer_function
 from ..parim.autocalib import ac_region
 from ..parim.espirit import espirit
 from ..recon.sake import sake
-from ..recon.sense import sense
+# from ..recon.sense import sense
 
 
 def process_siemens_file(fname):
@@ -68,8 +68,6 @@ def process_siemens_folder(folder):
                     process = 0
 
     return process
-
-    return True
 
 
 def sake_espirit(

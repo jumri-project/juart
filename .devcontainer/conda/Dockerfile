@@ -109,6 +109,8 @@ RUN apt-get update \
     && apt-get install -y \
     build-essential \
     ssh \
+    libfftw3-dev \
+    pkg-config \
     g++ \
     cmake \
     git \

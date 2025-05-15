@@ -19,3 +19,5 @@ dependencies:
     - finufft
     - ismrmrd
     - torch>=2.0.0
+    - MRzeroCore
+    - git+https://github.com/inm-4/pypulseq.git@devel
