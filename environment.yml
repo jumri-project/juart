@@ -6,7 +6,9 @@ dependencies:
   - ipympl
   - ipywidgets
   - matplotlib
+  - numba
   - numpy
+  - pandas
   - pip
   - pre-commit
   - ruff

@@ -148,16 +148,17 @@ class KSpaceData:
         # Read the acquisition.
         acquisition = shared_dataset.read_acquisition(index)
 
-        # Update shared memory.
-        kdata[
-            :,
-            :,
-            acquisition.idx.kspace_encode_step_1,
-            acquisition.idx.kspace_encode_step_2,
-            acquisition.idx.slice,
-            acquisition.idx.set,
-            acquisition.idx.contrast,
-        ] = torch.tensor(acquisition.data)
+        if acquisition.data.shape == kdata.shape[:2]:
+            # Update shared memory.
+            kdata[
+                :,
+                :,
+                acquisition.idx.kspace_encode_step_1,
+                acquisition.idx.kspace_encode_step_2,
+                acquisition.idx.slice,
+                acquisition.idx.set,
+                acquisition.idx.contrast,
+            ] = torch.tensor(acquisition.data)
 
     def read_data(self, dataset, is_pulseq=False):
         """

@@ -5,7 +5,7 @@
 *.DS_Store
 *egg-info
 *egg
-__pycache__
+**/__pycache__/
 
 /build
 LocalData/

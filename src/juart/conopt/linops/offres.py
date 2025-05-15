@@ -6,7 +6,7 @@ from ..tfs import apply_transfer_function
 from . import LinearOperator
 
 
-class TransferFunctionOperator(LinearOperator):
+class OffresonaceTransferFunctionOperator(LinearOperator):
     """
     Operator for applying oversampled transfer functions in both forward and adjoint
     directions. Typically used in Fourier-based methods for structured data processing.
@@ -14,7 +14,8 @@ class TransferFunctionOperator(LinearOperator):
 
     def __init__(
         self,
-        transfer_function: torch.Tensor,
+        transfer_functions: Tuple[torch.Tensor, ...],
+        phases: Tuple[torch.Tensor, ...],
         shape: Tuple[int, ...],
         axes: Tuple[int, ...] = (1, 2),
         device: Optional[torch.device] = None,
@@ -41,7 +42,10 @@ class TransferFunctionOperator(LinearOperator):
             2 * torch.prod(torch.tensor(self.forward_shape)),
         )
 
-        self.transfer_function = transfer_function.to(device)
+        self.transfer_functions = [
+            transfer_function.to(device) for transfer_function in transfer_functions
+        ]
+        self.phases = [phase.to(device) for phase in phases]
 
         # Set the data types
         self.dtype = torch.float32
@@ -68,9 +72,14 @@ class TransferFunctionOperator(LinearOperator):
         input_tensor = input_tensor.view(self.internal_dtype).reshape(
             self.forward_shape
         )
-        output_tensor = apply_transfer_function(
-            input_tensor, self.transfer_function, self.axes
-        )
+
+        output_tensor = torch.zeros_like(input_tensor)
+
+        for transfer_function, phase in zip(self.transfer_functions, self.phases):
+            output_tensor += torch.conj(phase) * apply_transfer_function(
+                phase * input_tensor, transfer_function, self.axes
+            )
+
         return output_tensor.ravel().view(self.dtype)
 
     def _rmatvec(
@@ -93,7 +102,12 @@ class TransferFunctionOperator(LinearOperator):
         input_tensor = input_tensor.view(self.internal_dtype).reshape(
             self.adjoint_shape
         )
-        output_tensor = apply_transfer_function(
-            input_tensor, self.transfer_function, self.axes
-        )
+
+        output_tensor = torch.zeros_like(input_tensor)
+
+        for transfer_function, phase in zip(self.transfer_functions, self.phases):
+            output_tensor += torch.conj(phase) * apply_transfer_function(
+                phase * input_tensor, transfer_function, self.axes
+            )
+
         return output_tensor.ravel().view(self.dtype)

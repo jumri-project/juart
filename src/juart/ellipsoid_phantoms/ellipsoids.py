@@ -171,7 +171,7 @@ class Geometry:
         # Transform ellipsoid back to unit sphere
         ellip_shift = r - self.center[:, None]
 
-        ellip_rot = torch.matmul(self.rot_matrix, ellip_shift)
+        ellip_rot = torch.matmul(self.rot_matrix.T, ellip_shift)
 
         sphere = ellip_rot**2 / self.axes[:, None] ** 2
 
@@ -550,8 +550,6 @@ class Ellipsoid:
         ktraj : torch.tensor, Shape (D, N)
             Kspace sample locations in D dimensions with N samples
             for which the signal should be calculated [1/m].
-        seq_type : str, optional
-            Sequence type for which to calculate the signal, by default 'GRE'
         seq_params : dict, optional
             Sequence parameters, by default only the spin-density is used.
 
@@ -573,7 +571,7 @@ class Ellipsoid:
 
         if seq_params is None:
             tissue_sig = torch.as_tensor(
-                self.tissue.spin_density,
+                [self.tissue.spin_density],
                 dtype=torch.float32,
                 device=self.device,
             )
@@ -628,11 +626,11 @@ class SheppLogan:
     ):
         self.fov = torch.as_tensor(fov, dtype=torch.float32, device=device)
         self.matrix = torch.as_tensor(matrix, dtype=torch.int32, device=device)
+
         self.ts2 = ts2
         self.blood_clot = blood_clot
         self.homogeneous = homogeneous
         self.coil = None
-        self.sens_maps = torch.ones(1, *matrix, dtype=torch.complex64, device=device)
 
         # Create the ellipsoids of phantom
         self.ellipsoids = self._create_ellipsoids()
@@ -646,12 +644,25 @@ class SheppLogan:
         return self.fov.device
 
     def add_coil(self, coil: Optional[Coil] = None):
-        """Add a coil to the phantom."""
+        """Add a coil to the phantom.
+
+        Parameters
+        ----------
+        coil: Coil, optional
+            Coil object to add to the phantom. If None, a default coil is created.
+            Default coil has 8 channels for 2D case and 15 channels for 3D case.
+        """
         if coil is None:
-            r = torch.max(self.fov) / 2
-            z = 0 if self.ndim == 2 else [-self.fov[2] / 4, 0, +self.fov[2] / 4]
-            num_channels_ring = 8
-            phi0 = 0 if self.ndim == 2 else [0, 2 * math.pi / num_channels_ring, 0]
+            r = torch.max(self.fov) / 2 + 0.05
+            if self.ndim == 2:
+                z = 0
+                phi0 = 0
+                num_channels_ring = 8
+            elif self.ndim == 3:
+                z = [-self.fov[2] / 4, 0, +self.fov[2] / 4]
+                num_channels_ring = 5
+                phi0 = [0, 2 * math.pi / num_channels_ring, 0]
+
             coil = Coil(
                 coil_radius=r,
                 num_loops_ring=num_channels_ring,
@@ -661,23 +672,66 @@ class SheppLogan:
 
             # Adjust coil shape to ellipsoid shape of phantom
             a, b = self.ellipsoids[0].geometry.axes[:2]
-            for cha in self.coil.coil_loops:
-                phi = torch.arctan2(cha.r_cent[1], cha.r_cent[0])
-
-                new_r = 3 * self.fov[0] / 2 + np.sqrt(
-                    a * torch.cos(phi) ** 2 + b * torch.sin(phi) ** 2
+            for i in range(len(coil.coil_loops)):
+                phi = np.arctan2(
+                    coil.coil_loops[i].r_cent[1], coil.coil_loops[i].r_cent[0]
                 )
 
-                cha.r_cent = np.array(
-                    [new_r * torch.cos(phi), new_r * torch.sin(phi), cha.r_cent[2]]
+                new_r = 3 / 2 * self.fov[0] + np.sqrt(
+                    a * np.cos(phi) ** 2 + b * np.sin(phi) ** 2
                 )
 
-                cha._build_coil_elements()
+                coil.coil_loops[i].r_cent = np.array(
+                    [
+                        new_r * np.cos(phi),
+                        new_r * np.sin(phi),
+                        coil.coil_loops[i].r_cent[2],
+                    ]
+                )
+
+                coil.coil_loops[i]._build_coil_elements()
 
             self.coil = coil
 
         else:
             self.coil = coil
+
+    def get_arb_kspace(
+        self,
+        ktraj: torch.tensor,
+        seq_params: Optional[dict] = None,
+        type: Literal["analytic", "numeric"] = "numeric",
+    ) -> torch.tensor:
+        """Returns the k-space signal for arbitrary kspace locations `ktraj`.
+
+        Parameters
+        ----------
+        ktraj : torch.tensor, Shape (D, N)
+            Kspace sample locations in D dimensions with N samples
+            for which the signal should be calculated [1/m].
+        seq_params : dict, optional
+            Sequence parameters, by default each ellipsoids signal
+            is its spin density.
+
+        Returns
+        -------
+        signal_obj : torch.tensor, Shape (N, E)
+            K-space signal for the ellipsoid on the grid with E echoes.
+            E is definded by the number of echo times `te` in `seq_params`.
+            If `seq_params` is None, E=1.
+        """
+        num_echoes = 1 if seq_params is None else len(seq_params["te"])
+
+        signal_obj = torch.zeros(
+            ktraj.shape[1], num_echoes, dtype=torch.complex64, device=self.device
+        )
+
+        for ellipsoid in self.ellipsoids:
+            sig_ellipsoid = ellipsoid.get_ksp_signal(ktraj, seq_params)
+
+            signal_obj += sig_ellipsoid
+
+        return signal_obj
 
     def get_object(self, seq_params: Optional[dict] = None):
         """Generate the signal object for the ellipsoid.
@@ -686,6 +740,8 @@ class SheppLogan:
         -------
         signal_obj : torch.tensor, Shape (*grid_size, E)
             Signal object for the ellipsoid on the grid with E echoes.
+            E is defined by the number of echo times `te` in `seq_params`.
+            If `seq_params` is None, E=1.
         seq_params: dict, optional
             Sequence parameters, by default each ellipsoids signal
             is its spin density.
@@ -701,9 +757,23 @@ class SheppLogan:
 
             signal_obj += sig_ellipsoid
 
+        # TODO: All outputs should have shape (C, Nx, Ny, Nz, ...)
+
+        if self.coil is not None:
+            sens_maps = self.coil.get_sens_maps(self.matrix, self.fov)
+            # Sens maps has shape (C, Nx, Ny, Nz) and has
+            # to be adjusted to signal obj with shape (*matrix, E)
+            # Add missing matrix dim
+            if self.ndim == 2:
+                signal_obj = signal_obj[:, :, None, ...]
+            # Add missing channel dim
+            signal_obj = signal_obj[None, ...]
+
+            signal_obj *= sens_maps[..., None]  # Add echo dim to sensitivity maps
+
         return signal_obj
 
-    def _create_ellipsoids(self):
+    def _create_ellipsoids(self) -> list[Ellipsoid]:
         ellipsoids = []
         ellips_counter = 0
 
@@ -840,7 +910,7 @@ Ellipsoids_3D = pd.DataFrame({
     'axis_a':       [0.720  , 0.69  , 0.6624    , 0.6524    , 0.41  , 0.31  , 0.210     , 0.046     , 0.046     , 0.046     , 0.046     , 0.023     , 0.056     , 0.056  , 0.2       ], # noqa: E501
     'axis_b':       [0.95   , 0.92  , 0.874     , 0.864     , 0.16  , 0.11  , 0.25      , 0.046     , 0.023     , 0.023     , 0.046     , 0.023     , 0.04      , 0.056  , 0.03      ], # noqa: E501
     'axis_c':       [0.93   , 0.9   , 0.88      , 0.87      , 0.21  , 0.22  , 0.35      , 0.046     , 0.02      , 0.02      , 0.046     , 0.023     , 0.1       , 0.1    , 0.1       ], # noqa: E501
-    'angle':        [0.0    , 0.0   , 0.0       , 0.0       , 72.0 , -72.0  , 0.0       , 0.0       , 0.0       , -90.0     , 0.0       , 0.0       , -90.0     , 0.0    , 70.0      ], # noqa: E501
+    'angle':        [0.0    , 0.0   , 0.0       , 0.0       , -72.0 , 72.0  , 0.0       , 0.0       , 0.0       , -90.0     , 0.0       , 0.0       , -90.0     , 0.0    , 70.0      ], # noqa: E501
     'type':         ['scalp', 'bone','csf'      , 'gray'    , 'csf' , 'csf' , 'white'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   , 'csf'  , 'clot'    ], # noqa: E501
 })
 
@@ -849,7 +919,7 @@ Ellipsoids_2D = pd.DataFrame({
     'center_y':     [0.00   , 0.00  , -0.0184   , -0.0184   , 0.000 , 0.00  , 0.35      , 0.1       , -0.605    , -0.605    , -0.10     , -0.605    ], # noqa: E501
     'axis_a':       [0.72   , 0.69  , 0.6624    , 0.6524    , 0.41  , 0.31  , 0.21      , 0.046     , 0.046     , 0.046     , 0.046     , 0.023     ], # noqa: E501
     'axis_b':       [0.95   , 0.92  , 0.874     , 0.864     , 0.16  , 0.11  , 0.25      , 0.046     , 0.023     , 0.023     , 0.046     , 0.023     ], # noqa: E501
-    'angle':        [0.0    , 0.0   , 0.0       , 0.0       , 72.0 , -72.0  , 0.0       , 0.0       , 0.0       , -90.0     , 0.0       , 0.0       ], # noqa: E501
+    'angle':        [0.0    , 0.0   , 0.0       , 0.0       , -72.0 , 72.0  , 0.0       , 0.0       , 0.0       , -90.0     , 0.0       , 0.0       ], # noqa: E501
     'type':       ['scalp', 'bone','csf'      , 'gray'    , 'csf' , 'csf' , 'white'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   , 'tumor'   ], # noqa: E501
 })
 

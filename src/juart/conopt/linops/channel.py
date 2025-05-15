@@ -33,7 +33,7 @@ class ChannelOperator(LinearOperator):
             Device on which the operator will run ('cpu' or 'cuda').
         """
         # Unpack the data shape
-        nX, nY, nZ, nS, nTI, nTE = data_shape
+        _, nX, nY, nZ, *add_axes = data_shape
 
         # Number of channels (coils)
         nC = coil_sensitivities.shape[0]
@@ -44,17 +44,21 @@ class ChannelOperator(LinearOperator):
         self.internal_dtype = torch.complex64
 
         # Define forward and adjoint shapes
-        self.forward_shape = (1, nX, nY, nZ, nS, nTI, nTE)
-        self.adjoint_shape = (nC, nX, nY, nZ, nS, nTI, nTE)
+        self.forward_shape = (1, *data_shape[1:])
+        self.adjoint_shape = (nC, *data_shape[1:])
 
         # Define the shape for complex-to-real operations
         self.shape = (
             2 * torch.prod(torch.tensor(self.adjoint_shape)),
             2 * torch.prod(torch.tensor(self.forward_shape)),
         )
+        coil_sensitivities = coil_sensitivities.to(device)
 
         # Store coil sensitivities, ensuring correct dimensions and device
-        self.coil_sensitivities = coil_sensitivities[..., None, None].to(device)
+        self.coil_sensitivities = torch.broadcast_to(
+            coil_sensitivities,
+            (*coil_sensitivities.shape[:4], *add_axes),
+        )
 
         # Normalize to unit spectral norm if required
         if normalize:
