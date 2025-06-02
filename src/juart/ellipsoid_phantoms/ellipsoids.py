@@ -698,10 +698,10 @@ class SheppLogan:
 
     def get_arb_kspace(
         self,
-        ktraj: torch.tensor,
+        ktraj: torch.Tensor,
         seq_params: Optional[dict] = None,
         type: Literal["analytic", "numeric"] = "numeric",
-    ) -> torch.tensor:
+    ) -> torch.Tensor:
         """Returns the k-space signal for arbitrary kspace locations `ktraj`.
 
         Parameters
@@ -733,7 +733,7 @@ class SheppLogan:
 
         return signal_obj
 
-    def get_object(self, seq_params: Optional[dict] = None):
+    def get_object(self, seq_params: Optional[dict] = None) -> torch.Tensor:
         """Generate the signal object for the ellipsoid.
 
         Returns
