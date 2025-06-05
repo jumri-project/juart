@@ -158,7 +158,7 @@ class TestNCGPatchGroup:
         assert group.num_patches == num_patches
         assert group.num_neighbors == num_neighbors
         assert group.num_dim == 2
-        assert torch.equal(group.shift_pattern, expect_shift_pattern)
+        assert torch.equal(group.int_shift_pattern, expect_shift_pattern)
 
 
 if __name__ == "__main__":

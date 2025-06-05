@@ -2,8 +2,12 @@ from collections import defaultdict
 from typing import Optional, Union
 
 import torch
+import torch.multiprocessing as mp
+from pytorch_finufft.functional import finufft_type2
 from scipy.spatial import KDTree
 from torch_geometric.utils import lexsort
+
+from juart.conopt.functional.fourier import fourier_transform_adjoint
 
 
 class NonCartGrappa:
@@ -16,6 +20,8 @@ class NonCartGrappa:
         device: Optional[torch.device] = None,
         p_norm: float = torch.inf,
         threads: int = -1,
+        shift_tol: float = 1e-3,
+        tik: float = 1e-3,
         # img_size: Optional[Union[Tuple[int], torch.Tensor, list[int]]] = None,+
     ):
         """Non cartesian GRAPPA reconstruction.
@@ -51,6 +57,9 @@ class NonCartGrappa:
 
         self.threads = threads
         self.num_dim = ktraj.shape[0] - 1
+        self.shift_tol = shift_tol
+        self.tik = tik
+        self.p_norm = p_norm
 
         # Convert kernel size to tuple
         if isinstance(kernel_size, int):
@@ -85,17 +94,35 @@ class NonCartGrappa:
         )
 
         # Define limitation of the kernel shape
-        self.p_norm = p_norm
         self.p_mask = _norm_ball_mask(kernel_size, p=self.p_norm)
 
         # Get indices of neighbors for each unsampled point in k-space
-        self.patches = NCG_Patch.from_ktraj(
+        patches = NCG_Patch.from_ktraj(
             self.ktraj_sampled,
             self.ktraj_unsampled,
             self.kernel_size,
             p_norm=self.p_norm,
             threads=self.threads,
         )
+
+        # Group patches by similar shift patterns
+        unq_patch_groups = NCG_PatchGroup.create_patch_groups(patches, self.shift_tol)
+
+        # Multiprocessing calibration of groups
+        def calibrate_group_worker(args):
+            group, calib_signal, tik = args
+            group.calibrate(calib_signal=calib_signal, tik=tik)
+            return group
+
+        ctx = mp.get_context("spawn")
+        with ctx.Pool(processes=self.threads if self.threads > 0 else None) as pool:
+            # Pass only necessary data to each worker
+            results = pool.map(
+                calibrate_group_worker,
+                [(group, self.calib_signal, self.tik) for group in unq_patch_groups],
+            )
+        # Store calibrated groups
+        self.unq_patch_groups = results
 
     @property
     def sample_mask(self) -> torch.Tensor:
@@ -114,9 +141,10 @@ class NonCartGrappa:
 
 
 class NCG_PatchGroup:
-    """A group of patches that share the same shift pattern."""
+    """A group of patches that share the same shift pattern.
+    This group holds one set of GRAPPA weights for all patches in the group."""
 
-    def __init__(self, patches: list["NCG_Patch"], tol: float = 1e-6):
+    def __init__(self, patches: list["NCG_Patch"]):
         if not patches:
             raise ValueError("Cannot create a patch group from an empty list.")
         # Check that all patches have the same number of neighbors
@@ -129,8 +157,156 @@ class NCG_PatchGroup:
         self.patches = patches
         self.kernel = None  # To be filled during calibration
 
+    def calibrate(self, calib_signal: torch.Tensor, tik: float = 1e-3) -> None:
+        """
+        Calibrate the GRAPPA kernel using the provided calibration signal.
+
+        This method computes the GRAPPA weights for the group patch using a 4D
+        calibration signal and Tikhonov regularization. The calibration signal is
+        expected to have the shape (C, R, P1, P2), where C is the number of coils,
+        and R, P1, P2 are spatial dimensions.
+
+        Parameters
+        ----------
+        calib_signal : torch.Tensor
+            4D tensor of shape (C, R, P1, P2) containing the calibration data.
+        tik : float, optional
+            Tikhonov regularization parameter. Default is 1e-3.
+
+        Raises
+        ------
+        ValueError
+            If the input calibration signal is not a 4D tensor.
+
+        """
+        # uses calib_signal of size (C, R, P1, P2) to compute grappa weights for the
+        # group patch. Uses Tikhonov regularization.
+
+        if calib_signal.ndim != 4:
+            raise ValueError(
+                f"Calibration signal must be 4D tensor, got {calib_signal.shape}"
+            )
+
+        # Remove singleton dimensions from the calibration signal
+        calib_signal = calib_signal.squeeze()
+
+        # Compute the coil products for the calibration images
+        coil_products, idx_ij = self.coil_product_acs(calib_signal)
+
+        # Interpolate the coil products to the neighbor locations
+        coil_prod_interp = self.interpolate_shifts_nufft(coil_products)
+
+        # Build the AhA and Ahb matrices
+        AhA, Ahb = self.build_AhA_Ahb(coil_prod_interp, idx_ij)
+
+        # Solve the least squares problem to get the GRAPPA weights
+        self.kernel = self._solve_least_squares(AhA, Ahb, tik=tik)
+
+    def coil_product_acs(
+        self, calib_signal: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Compute the coil product of the calibration signal.
+
+        Parameters
+        ----------
+        calib_signal : torch.Tensor, shape (C, ...)
+            Calibration signal to use for the coil product.
+
+        Returns
+        -------
+        prod : torch.Tensor, shape (C*(C+1)/2, ...)
+            Coil product images, where each image is the product of two channels.
+
+        idx_ij : torch.Tensor, shape (2, C*(C+1)/2)
+            Indices of the channels used for the coil product.
+        """
+        num_cha = calib_signal.shape[0]
+        fft_axes = tuple(range(1, calib_signal.ndim - 1))
+        calib_img = fourier_transform_adjoint(calib_signal, fft_axes)
+
+        idx_ij = torch.triu_indices(num_cha, num_cha)
+        prod = torch.conj(calib_img[idx_ij[0]]) * calib_img[idx_ij[1]]
+
+        prod = prod.reshape(-1, *calib_signal.shape[1:])
+
+        return prod, idx_ij
+
+    def interpolate_shifts_nufft(self, coil_products: torch.Tensor) -> torch.Tensor:
+        """
+        Interpolate ACS region to neighbor locations using NUFFT.
+        This method is a placeholder and should be implemented based on the
+        specific requirements of the NUFFT interpolation.
+
+        Parameters
+        ----------
+        coil_products : torch.Tensor, shape (C*(C+1)/2, ...)
+            Coil product images to interpolate.
+
+        Returns
+        -------
+        interpolated_shifts : torch.Tensor, shape (C*(C+1)/2, N)
+            Interpolated shifts for the patches in the group for N neighbours in patch.
+        """
+
+        patch = self.patches[0]
+        shifts = patch.neighbor_dist
+
+        # Scale shifts to [-pi,pi]
+        shifts = torch.pi * shifts / shifts.max()
+
+        # Move first dimension (num_comb) to the end before NUFFT
+        coil_prod_interp = finufft_type2(
+            points=shifts,
+            targets=coil_products,
+        )
+
+        return coil_prod_interp
+
+    def build_AhA_Ahb(
+        self, interp_vals: torch.Tensor, idx_ij: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Form NhN and NhC from interpolated data using vectorized broadcasting."""
+        num_cha = int(idx_ij.max()) + 1  # Number of channels
+
+        N = num_cha * self.num_neighbors
+
+        AhA = torch.zeros((N, N), dtype=torch.complex64, device=interp_vals.device)
+        Ahb = torch.zeros((N, N), dtype=torch.complex64, device=interp_vals.device)
+
+        idx_i, idx_j = torch.triu_indices(num_cha, num_cha)
+        blocks = [
+            slice(i * self.num_neighbors, (i + 1) * self.num_neighbors)
+            for i in range(num_cha)
+        ]
+
+        for c_idx, (i1, i2) in enumerate(zip(idx_i, idx_j)):
+            tmp = interp_vals[c_idx]  # shape: [self.num_neighbors]
+            outer = (
+                tmp[:, None] * tmp[None, :]
+            )  # [self.num_neighbors, self.num_neighbors]
+
+            b1, b2 = blocks[i1], blocks[i2]
+            AhA[b1, b2] = outer
+            Ahb[b1, i2] = tmp
+
+            if i1 != i2:
+                AhA[b2, b1] = outer.T
+                Ahb[b2, i1] = torch.conj(tmp)
+
+        return AhA, Ahb
+
+    def _solve_least_squares(self, NhN, NhC, tik: float = 1e-3) -> torch.Tensor:
+        """Solve NhN * x = NhC for weights with Tikhonov regularization."""
+
+        N = NhN.shape[0]
+        NhN_reg = NhN + tik * torch.eye(N, dtype=NhN.dtype, device=NhN.device)
+
+        coeff = torch.linalg.solve(NhN_reg, NhC)
+
+        return coeff
+
     @property
-    def shift_pattern(self) -> torch.Tensor:
+    def int_shift_pattern(self) -> torch.Tensor:
         """Return the integer shift pattern (D, N), or None if neighbor_dist is None."""
         return self.patches[0].get_int_shift_pattern()
 
@@ -386,6 +562,7 @@ def _get_neighbor_indices(
     """
     Get indices of neighbors for each unsampled point in k-space using KDTree search.
     """
+    # Scale the trajectory units of kernel size
     norm_factor = kernel_size / 2.0
     traj_sampled = traj_sampled / norm_factor[:, None]
     traj_unsampled = traj_unsampled / norm_factor[:, None]
