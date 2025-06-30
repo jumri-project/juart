@@ -19,5 +19,8 @@ dependencies:
   - zarr
   - pip:
     - finufft
+    - gitpython
     - ismrmrd
+    - joblib
+    - pytorch-finufft
     - torch>=2.0.0

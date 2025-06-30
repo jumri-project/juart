@@ -5,7 +5,7 @@ import torch
 from ..conopt.linops.composite import ConcatOperator, SumOperator
 from ..conopt.linops.identity import IdentityOperator
 from ..conopt.linops.system import SystemMatrixNormalOperator, SystemMatrixOperator
-from ..conopt.linops.tf import OversampledTransferFunctionNormalOperator
+from ..conopt.linops.tf import TransferFunctionOperator
 from ..conopt.linops.wavelet import WaveletTransformOperator
 from ..conopt.proxalgs.admm import ADMM
 from ..conopt.proxops.composite import SeparableProximalOperator
@@ -38,8 +38,8 @@ class SAKE(object):
         prox_ops = []
 
         # Define the OversampledTransferFunctionNormalOperator
-        transfer_function_operator = OversampledTransferFunctionNormalOperator(
-            transfer_function, (nC, nX, nY, nZ, nS, nTI, nTE), nonuniform_axes=(1, 2)
+        transfer_function_operator = TransferFunctionOperator(
+            transfer_function, (nC, nX, nY, nZ, nS, nTI, nTE), axes=(1, 2)
         )
 
         if lambda_wavelet is not None:
@@ -109,8 +109,9 @@ class SAKE(object):
             prox_ops,
             self.concatenated_operator.indices,
         )
+
         prox_g = LinearProximalSolver(
-            regridded_data.view(torch.float32).ravel(),
+            regridded_data.ravel().view(torch.float32),
             transfer_function_operator,
             self.concatenated_operator,
             self.concatenated_normal_operator,

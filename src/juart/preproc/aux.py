@@ -6,7 +6,6 @@ from threadpoolctl import threadpool_limits
 
 from ..conopt.functional import pad_tensor
 from ..conopt.functional.fourier import (
-    fourier_transform_adjoint,
     fourier_transform_forward,
     nonuniform_fourier_transform_adjoint,
 )
@@ -14,7 +13,6 @@ from ..conopt.tfs.fourier import nonuniform_transfer_function
 from ..parim.autocalib import ac_region
 from ..parim.espirit import espirit
 from ..recon.sake import sake
-from ..recon.sense import sense
 
 
 def process_siemens_file(fname):
@@ -52,7 +50,8 @@ def sake_espirit(
 
     NAcl = 32
     scale = 1e-4
-    NImx, NImy, ISet_coil, IEco_coil = 256, 256, slice(15, 19), slice(0, 1)
+    NImx, NImy, ISet_coil, IEco_coil = 256, 256, slice(1, 2), slice(0, 1)
+    # NImx, NImy, ISet_coil, IEco_coil = 256, 256, slice(15, 19), slice(0, 1)
     NCha, NLin, NCol, NPar, NSli, NSet, NEco = kdata.shape
 
     with threadpool_limits(limits=1, user_api="blas"):
@@ -63,14 +62,23 @@ def sake_espirit(
         d = d.reshape((NCha, 1, 1, -1, 1, 1, 1))
 
         kc, dc = ac_region(k, d, NAcl, NCol, ord=torch.inf)
-        nKc = kc.shape[1]
+
+        dc = dc[:, 0, 0, ...].clone()
 
         AHdc = nonuniform_fourier_transform_adjoint(
-            kc, dc, (NAcl, NAcl, 1), (NCha, NAcl, NAcl, 1, 1, 1, 1)
+            kc,
+            dc,
+            (NAcl, NAcl),
         )
+        # AHdc = nonuniform_fourier_transform_adjoint(
+        #     kc, dc, (NAcl, NAcl, 1), (NCha, NAcl, NAcl, 1, 1, 1, 1)
+        # )
         Hc = nonuniform_transfer_function(
-            kc, (NAcl, NAcl, 1, 1, 1, 1, nKc), oversampling=(2, 2, 1)
+            kc, (1, NAcl, NAcl, 1, 1, 1, 1), oversampling=(2, 2)
         )
+        # Hc = nonuniform_transfer_function(
+        #     kc, (NAcl, NAcl, 1, 1, 1, 1, nKc), oversampling=(2, 2, 1)
+        # )
 
         x = sake(AHdc, Hc, lamda_system=0.1, inner_iter=1, outer_iter=100)
 
@@ -82,50 +90,53 @@ def sake_espirit(
     return C[:, :, :, :, None, None, None]
 
 
-def espirit_sense(
-    kspace_data_undersampled,
-    partition_mask,
+def sake_espirit_multicontrast(
+    kdata,
+    ktraj,
 ):
-    # kspace_data_undersampled: (nC, nX, nY, nZ, nS, nTI, nTE)
-    # partition_mask: (1, nX, 1, 1, 1, 1, 1)
-    # C: (nC, nX, nY, nZ, nS)
+    import os
 
-    # pass to ESPIRiT: (nC, nX, nY, nZ, nTI * nTE)
-    # although currently (nC, nX, nY, nZ, nTI)
+    os.environ["FFT_NUM_THREADS"] = "1"
+    os.environ["NUMBA_NUM_THREADS"] = "1"
 
-    nC, nX, nY, nZ, nS, nTI, nTE = kspace_data_undersampled.shape
-
+    NAcl = 32
     scale = 1e-4
-
-    kspace_data_undersampled = kspace_data_undersampled / scale
-
-    # nS must be 1
+    NImx, NImy = 256, 256
+    NCha, NLin, NCol, NPar, NSli, NSet, NEco = kdata.shape
 
     with threadpool_limits(limits=1, user_api="blas"):
-        C_est = espirit(
-            kspace_data_undersampled.reshape((nC, nX, nY, nZ, nTI * nTE)),
-            (nX, nY, 1),
-        ).reshape((nC, nX, nY, nZ, nS))
+        k = ktraj
+        d = kdata / scale
 
-        AHd = torch.conj(C_est)[..., None, None] * fourier_transform_adjoint(
-            kspace_data_undersampled, axes=(1, 2, 3)
+        k = k.reshape((2, -1, 1, NSet, NEco))
+        d = d.reshape((NCha, 1, 1, -1, 1, NSet, NEco))
+
+        kc, dc = ac_region(k, d, NAcl, NCol, ord=torch.inf)
+
+        dc = dc[:, 0, 0, ...].clone()
+
+        AHdc = nonuniform_fourier_transform_adjoint(
+            kc,
+            dc,
+            (NAcl, NAcl),
         )
-        AHd = torch.sum(AHd, dim=0)
-
-        images = sense(
-            C_est.to(torch.complex64),
-            AHd.to(torch.complex64),
-            partition_mask.to(torch.float32),
-            lambda_wavelet=1e-4,
-            channel_normalize=False,
-            inner_iter=10,
-            outer_iter=15,
+        # AHdc = nonuniform_fourier_transform_adjoint(
+        #     kc, dc, (NAcl, NAcl, 1), (NCha, NAcl, NAcl, 1, 1, 1, 1)
+        # )
+        Hc = nonuniform_transfer_function(
+            kc, (1, NAcl, NAcl, 1, 1, NSet, NEco), oversampling=(2, 2)
         )
+        # Hc = nonuniform_transfer_function(
+        #     kc, (NAcl, NAcl, 1, 1, 1, 1, nKc), oversampling=(2, 2, 1)
+        # )
 
-        kspaces_espirit = fourier_transform_forward(
-            C_est[..., None, None] * images[None, ...], axes=(1, 2, 3)
-        )
+        x = sake(AHdc, Hc, lamda_system=0.1, inner_iter=1, outer_iter=100)
 
-        kspaces_espirit = kspaces_espirit * scale
+        x = fourier_transform_forward(x, (1, 2))
+        x = pad_tensor(x, (NCha, NImx, NImy, 1, 1, NSet, NEco))
 
-    return kspaces_espirit
+        x = x.reshape((NCha, NImx, NImy, 1, NSet * NEco))
+
+        C = espirit(x, (NImx, NImy, 1))
+
+    return C[:, :, :, :, None, None, None]
