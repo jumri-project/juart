@@ -19,5 +19,12 @@
   "mounts": [
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.aws,target=/root/.aws,type=bind"
   ],
-  "postCreateCommand": "sh .devcontainer/post-create.sh"
+  "postCreateCommand": "sh .devcontainer/post-create.sh",
+  "runArgs": [
+    "--gpus",
+    "all"
+  ],
+  "hostRequirements": {
+    "gpu": "optional"
+  }
 }
