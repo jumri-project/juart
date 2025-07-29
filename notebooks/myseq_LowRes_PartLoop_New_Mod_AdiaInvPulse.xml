@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Parameters FOVx="220" FOVy="220" FOVz="1" GradMaxAmpl="160" Name="P" Nx="64" Ny="16"
+            Nz="1"
+            TD="2.8"
+            TE="3.1"
+            TI="260"
+            TR="9512.4">
+   <ConcatSequence Aux1="2*Pi/(1+sqrt(5))" Aux2="19" Aux3="9" LoopFlag="2" Name="PEL"
+                   Observe="NY=P.Ny"
+                   Repetitions="NY">
+      <ATOMICSEQUENCE Name="Ainv">
+         <SECHRFPULSE Duration="5.12" FlipAngle="210" Name="INV1" Symmetry="0.5"/>
+      </ATOMICSEQUENCE>
+      <ATOMICSEQUENCE Name="Acru1">
+         <CONSTANTGRADPULSE Amplitude="160" Axis="GX" Duration="Dur" Name="crX1"
+                            Observe="AX=roX.Amplitude, AY=roY.Amplitude, Dur=roX.Duration"/>
+         <CONSTANTGRADPULSE Amplitude="A" Axis="GY" Duration="Dur" Name="crY1"
+                            Observe="A=crX1.Amplitude, Dur=crX1.Duration"/>
+         <CONSTANTGRADPULSE Amplitude="A" Axis="GZ" Duration="Dur" Name="crZ1"
+                            Observe="A=crX1.Amplitude, Dur=crX1.Duration"/>
+      </ATOMICSEQUENCE>
+      <DELAYATOMICSEQUENCE Delay="TI-INVDUR/2-CRUDUR-RFDUR/2" DelayType="B2E" Name="TI0"
+                           Observe="TI=P.TI, INVDUR=INV1.Duration, CRUDUR=crX1.Duration, RFDUR=RF1.Duration"/>
+      <CONCATSEQUENCE Aux1="GA*(iL+iTI/nTI)" LoopFlag="8" Name="SET"
+                      Observe="nTI=PEL.Aux2, GA=PEL.Aux1, iL=PEL.Counter, iTI=SET.Counter"
+                      Repetitions="nTI">
+         <CONCATSEQUENCE LoopFlag="4" Name="PAL" Observe="PAR=P.Nz" Repetitions="PAR">
+            <ATOMICSEQUENCE Name="Aslice">
+               <HARDRFPULSE Axis="RF" Duration="2" FlipAngle="5" InitialPhase="0" Name="RF1"/>
+            </ATOMICSEQUENCE>
+            <DELAYATOMICSEQUENCE Delay="TE-RoDur/2-PreDur-RFDUR/2" DelayType="B2E" Name="TE0"
+                                 Observe="TE=P.TE, PreDur=Apre.Duration, RoDur=Aro.Duration, RFDUR=RF1.Duration"/>
+            <ATOMICSEQUENCE Name="Apre">
+               <CONSTANTGRADPULSE Amplitude="(-1)^(iTI*nTE+1)*KMX*cos(PhiStart)/Dur" Axis="GX" Duration="D/2"
+                                  Name="preX"
+                                  Observe="KMX=P.KMAXx, PhiStart=SET.Aux1, nTE=PEL.Aux3, iTI=SET.Counter, D=roX.Duration, Dur=preX.Duration"/>
+               <CONSTANTGRADPULSE Amplitude="(-1)^(iTI*nTE+1)*KMX*sin(PhiStart)/Dur" Axis="GY" Duration="D/2"
+                                  Name="preY"
+                                  Observe="KMX=P.KMAXx, PhiStart=SET.Aux1, nTE=PEL.Aux3, iTI=SET.Counter, D=roX.Duration, Dur=preY.Duration"/>
+            </ATOMICSEQUENCE>
+            <CONCATSEQUENCE Aux1="PhiSet+GA*iTE/(nTE*nTI)" Aux2="PhiSet+GA*(iTE+1)/(nTE*nTI)" LoopFlag="16"
+                            Name="CL"
+                            Observe="nTI=PEL.Aux2, nTE=PEL.Aux3, GA=PEL.Aux1, PhiSet=SET.Aux1, iTE=CL.Counter"
+                            Repetitions="nTE">
+               <ATOMICSEQUENCE Name="Aro">
+                  <CONSTANTGRADPULSE ADCFlag="2" ADCs="NX" Amplitude="2*KMX*(-1)^(iTI*nTE+iTE)*cos(PhiStart)/Dur"
+                                     Axis="GX"
+                                     Duration="1.0"
+                                     Name="roX"
+                                     Observe="KMX=P.KMAXx, NX=P.Nx, PhiStart=CL.Aux1, nTE=PEL.Aux3, iTI=SET.Counter, iTE=CL.Counter, Dur=roX.Duration"/>
+                  <CONSTANTGRADPULSE Amplitude="2*KMX*(-1)^(iTI*nTE+iTE)*sin(PhiStart)/Dur" Axis="GY" Duration="D"
+                                     Name="roY"
+                                     Observe="KMX=P.KMAXx, PhiStart=CL.Aux1, nTE=PEL.Aux3, iTI=SET.Counter, iTE=CL.Counter, D=roX.Duration, Dur=roY.Duration"/>
+               </ATOMICSEQUENCE>
+               <ATOMICSEQUENCE Name="Ablip">
+                  <CONSTANTGRADPULSE Amplitude="KMX*(-1)^(iTI*nTE+iTE)*(cos(PhiEnd)-cos(PhiStart))/Dur" Axis="GX"
+                                     Duration="D/2"
+                                     Name="blipX"
+                                     Observe="KMX=P.KMAXx, PhiStart=CL.Aux1,PhiEnd=CL.Aux2,  nTE=PEL.Aux3, iTI=SET.Counter, iTE=CL.Counter, D=roX.Duration, Dur=blipX.Duration"/>
+                  <CONSTANTGRADPULSE Amplitude="KMX*(-1)^(iTI*nTE+iTE)*(sin(PhiEnd)-sin(PhiStart))/Dur" Axis="GY"
+                                     Duration="D/2"
+                                     Name="blipY"
+                                     Observe="KMX=P.KMAXx, PhiStart=CL.Aux1,PhiEnd=CL.Aux2,  nTE=PEL.Aux3, iTI=SET.Counter, iTE=CL.Counter, D=roX.Duration, Dur=blipY.Duration"/>
+               </ATOMICSEQUENCE>
+               <DELAYATOMICSEQUENCE Delay="DTE-RoDur-BlipDur" DelayType="B2E" Name="DTE2"
+                                    Observe="DTE=P.TD, RoDur=Aro.Duration, BlipDur=Ablip.Duration"/>
+            </CONCATSEQUENCE>
+            <ATOMICSEQUENCE Name="Acru2">
+               <CONSTANTGRADPULSE Amplitude="160" Axis="GX" Duration="Dur" Name="crX2"
+                                  Observe="AX=roX.Amplitude, AY=roY.Amplitude, Dur=roX.Duration"/>
+               <CONSTANTGRADPULSE Amplitude="A" Axis="GY" Duration="Dur" Name="crY2"
+                                  Observe="A=crX2.Amplitude, Dur=crX2.Duration"/>
+               <CONSTANTGRADPULSE Amplitude="A" Axis="GZ" Duration="Dur" Name="crZ2"
+                                  Observe="A=crX2.Amplitude, Dur=crX2.Duration"/>
+            </ATOMICSEQUENCE>
+            <DELAYATOMICSEQUENCE Delay="RoDur+BlipDur" DelayType="B2E" Name="TEFill"
+                                 Observe="RoDur=Aro.Duration, BlipDur=Ablip.Duration"/>
+         </CONCATSEQUENCE>
+         <DELAYATOMICSEQUENCE Aux1="500" Aux2="TE0+nTE*DTE+CRUDUR+TEF+RFDUR/2-RoDur/2"
+                              Delay="DeltaTI-PAR*TRSKernel"
+                              DelayType="B2E"
+                              Name="DTIC"
+                              Observe="DeltaTI=DTIC.Aux1, nTE=PEL.Aux3, PAR=P.Nz, RFDUR=RF1.Duration, TE0=P.TE, DTE=P.TD, CRUDUR=crX1.Duration, TEF=TEFill.Duration, TRSKernel=DTIC.Aux2, RoDur=roX.Duration"/>
+      </CONCATSEQUENCE>
+      <DELAYATOMICSEQUENCE Delay="TR-TI-(nTI-1)*DeltaTI-INVDUR/2+RFDur/2" DelayType="B2E" Name="DTR"
+                           Observe="TR=P.TR, TI=P.TI, DeltaTI=DTIC.Aux1, nTI=PEL.Aux2, INVDUR=INV1.Duration, RFDur = RF1.Duration"/>
+   </ConcatSequence>
+</Parameters>
