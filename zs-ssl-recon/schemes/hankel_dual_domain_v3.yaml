@@ -1,0 +1,72 @@
+# A main limitation of model training is stability.
+# To address this issue we use
+# - a small learning rate of 0.0001 to account for the small batch size
+# - gradient clipping to solve the exploding gradient problem
+
+# Model parameters
+num_unroll_blocks: 10
+num_res_blocks: 15
+CG_Iter: 10
+activation: "ReLU"
+features: 512
+
+# Loss function parameters
+weight_kspace_loss: [0.5, 0.5]
+weight_ispace_loss: [0.1, 0.1]
+weight_hankel_loss: [0.0, 0.01]
+weight_casorati_loss: [0.0, 0.0]
+normalized_loss: true
+
+# Training parameters
+epochs: 25
+optimizer: "AdamW"
+lr: 0.0001
+betas: [0.9, 0.999]
+eps: 1.0e-8
+weight_decay: 0.01
+averaged_model: "EMA"
+ema_decay: 0.9
+model_training: true
+model_validation: false
+fractions: [0.0, 0.5, 0.5]
+
+save_checkpoint: true
+checkpoint_frequency: 10
+
+load_model_state: true
+load_averaged_model_state: true
+load_optim_state: true
+load_metrics: true
+
+disable_progress_bar: true
+timing_level: 0
+validation_level: 0
+
+num_threads: 24
+num_cpu_per_worker: 24
+num_gpu_per_worker: 1
+
+num_workers: 2
+group_size: 2
+batch_size: 1
+use_gpu: true
+device: "cuda"
+
+data_dir: "qrage/datasets/%s/preproc/mz_me_mpnrage3d_grappa_%03d.h5"
+data_backend: "s3"
+session_dir: "qrage/sessions/%s/preproc/mz_me_mpnrage3d_grappa.h5"
+session_backend: "s3"
+model_dir: "qrage/models/ssl_512_features_ddp/hankel_dual_domain_v3"
+model_backend: "s3"
+image_dir: "qrage/recons/%s/images-hankel-dual-domain-v3"
+image_backend: "s3"
+endpoint_url: "https://s3.fz-juelich.de"
+
+datasets: ["7T1026", "7T1027", "7T1028", "7T1029"]
+slices:
+  start: 0
+  stop: 160
+  step: 1
+shape: [256, 256, 19, 9]
+num_spokes: 8
+model_tag: ""
