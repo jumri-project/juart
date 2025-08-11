@@ -2,11 +2,16 @@ from typing import Callable, Optional
 
 import torch
 
-from ..conopt.functional.fourier import nonuniform_fourier_transform_adjoint
+from ..conopt.functional.fourier import (
+    fourier_transform_adjoint,
+    nonuniform_fourier_transform_adjoint,
+)
 from ..conopt.linops.channel import ChannelOperator
 from ..conopt.linops.tf import TransferFunctionOperator
 from ..conopt.proxalgs.cg import LinearSolver
-from ..conopt.tfs.fourier import nonuniform_transfer_function
+from ..conopt.tfs.fourier import (
+    nonuniform_transfer_function,
+)
 
 
 def cgsense(
@@ -101,6 +106,70 @@ def cgsense(
     return img
 
 
+def cart_cgsense(
+    ksp: torch.Tensor,
+    coil_sensitivities: torch.Tensor,
+    channel_normalize: bool = True,
+    maxiter: int = 20,
+    verbose: bool = False,
+) -> torch.Tensor:
+    """
+    Solve the SENSE reconstruction problem using the conjugate gradient method
+    for Cartesian k-space data.
+
+    Parameters
+    ----------
+    ksp : torch.Tensor, shape (nC, nX, nY)
+        Raw k-space data to be reconstructed, where nC is the number of channels,
+        and nX, nY are the spatial dimensions.
+    coil_sensitivities : torch.Tensor, shape (nC, nX, nY)
+        Coil sensitivity maps used for sensitivity encoding (SENSE).
+    channel_normalize : bool, optional
+        Whether to normalize the channel sensitivities (default is True).
+    maxiter : int, optional
+        Maximum number of iterations for the conjugate gradient solver (default is 20).
+    verbose : bool, optional
+        If True, print convergence information (default is False).
+
+    Returns
+    -------
+    img : torch.Tensor
+        Reconstructed image
+        with shape (1, nX, nY).
+    """
+    num_cha, num_x, num_y, num_z = coil_sensitivities.shape
+
+    if ksp.shape[0] != num_cha:
+        raise ValueError(
+            f"Number of channels in ksp ({ksp.shape[0]}) does not match "
+            f"number of channels in coil_sensitivities ({num_cha})."
+        )
+
+    transfer_function = torch.where(ksp[0, ...] != 0, 1, 0).to(ksp.device)
+    transfer_function = transfer_function[None, ...]
+
+    img_data = fourier_transform_adjoint(
+        ksp,
+        axes=(1, 2, 3),
+    )
+
+    regridded_data = torch.sum(torch.conj(coil_sensitivities) * img_data, dim=0)
+
+    sense_operator = SENSE(
+        coil_sensitivities=coil_sensitivities,
+        regridded_data=regridded_data,
+        transfer_function=transfer_function,
+        channel_normalize=channel_normalize,
+        maxiter=maxiter,
+        verbose=verbose,
+    )
+
+    img = sense_operator.solve()
+    img = img.view(torch.complex64).reshape(1, num_x, num_y)
+
+    return img
+
+
 class SENSE:
     def __init__(
         self,
@@ -126,10 +195,6 @@ class SENSE:
         transfer_function : torch.Tensor
             Transfer function used in the frequency domain, representing the
             encoding operator for the system.
-        shape : tuple of ints
-            Shape of the data in the form (nX, nY, nZ, nS, nTI, nTE), where nX,
-            nY, nZ are spatial dimensions, nS is the number of channels, and
-            nTI, nTE are the number of inversion and echo times, respectively.
         maxiter : int, optional
             Number of  iterations for solving the linear system using the
             conjugate gradient method (default is 15).
