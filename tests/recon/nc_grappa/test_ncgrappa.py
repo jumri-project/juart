@@ -35,6 +35,16 @@ def single_patch_locs(
     return locs
 
 
+def empty_patch_locs(
+    num_dim: int = 2,
+    k_max: float = 100.0,
+) -> torch.Tensor:
+    """Create k-space location data for an empty patch"""
+    center_loc = (torch.rand(num_dim, 1) - 0.5) * k_max
+    center_loc = torch.cat((center_loc, torch.zeros(1, center_loc.shape[1])), dim=0)
+    return center_loc
+
+
 def multiple_patch_locs(
     num_patches: int = 10,
     num_dim: int = 2,
@@ -83,6 +93,60 @@ def multiple_patch_locs(
     locs = torch.stack(patches, dim=-1)
 
     return locs
+
+
+def filled_and_empty_patch_locs(
+    num_filled_patches: int = 5,
+    num_empty_patches: int = 5,
+    num_dim: int = 2,
+    num_neighbors: int = 10,
+    kernel_size: int = 7,
+    k_max: float = 100.0,
+) -> list[torch.Tensor]:
+    """Create k-space location data for multiple patches.
+    Returns a list of (num_filled_patches+num_empty_patches)
+    patch locations of shape (num_dim+1, num_neighbors)"""
+
+    patches = []
+    centers = []
+
+    while len(patches) < (num_filled_patches + num_empty_patches):
+        # Generate a candidate center location
+        candidate_center = (torch.rand(num_dim, 1) - 0.5) * k_max - kernel_size
+        candidate_center = torch.clamp(
+            candidate_center,
+            min=-(k_max - kernel_size),
+            max=(k_max - kernel_size),
+        )
+
+        # Check distance to all existing centers
+        if centers:
+            dists = torch.stack(
+                [torch.norm(candidate_center.squeeze() - c.squeeze()) for c in centers]
+            )
+            if torch.any(dists < kernel_size):
+                continue
+
+        # Generate patch with this center
+        candidate_center = torch.cat((candidate_center, torch.zeros(1, 1)), dim=0)
+
+        if len(patches) < num_filled_patches:
+            neibhor_locs = (torch.rand(num_dim, num_neighbors) - 0.5) * kernel_size
+            neibhor_locs = torch.cat(
+                (neibhor_locs, torch.ones(1, neibhor_locs.shape[1])), dim=0
+            )
+
+            neibhor_locs[:-1, :] = neibhor_locs[:-1, :] + candidate_center[:-1, :]
+
+            locs = torch.cat((candidate_center, neibhor_locs), dim=1)
+        else:
+            # Create an empty patch with no neighbors
+            locs = candidate_center.clone()
+
+        patches.append(locs)
+        centers.append(candidate_center[:-1])
+
+    return patches
 
 
 ### Start of test functions
@@ -219,9 +283,74 @@ def test_FilledPatch_init(k, k_neigh_expect, sift_mask_expect, do_sift):
     assert patch.sift_mask.sum() == k_neigh_expect.shape[1]
 
 
+def test_EmptyPatch_init():
+    """Test initialization of EmptyPatch."""
+    kpatch = empty_patch_locs(num_dim=2, k_max=100.0)
+    ktraj = (torch.rand(3, 500) - 0.5) * 100
+    ktraj[-1, :] = 2.0
+
+    ktraj = torch.cat((ktraj, kpatch), dim=1)
+
+    # Shuffle ktraj along the second dimension (axis=1)
+    perm = torch.randperm(ktraj.shape[1])
+    ktraj = ktraj[:, perm]
+
+    center_ind_exp = torch.where(ktraj[-1] == 0)[0]
+
+    patch = ncgrappa_2.EmptyPatch(
+        ktraj=ktraj,
+        center_ind=center_ind_exp,
+    )
+
+    assert patch.ktraj.data_ptr() == ktraj.data_ptr()
+    assert patch.center_ind == center_ind_exp
+
+
+def test_EmptyPatch_from_indices():
+    """Test initialization of EmptyPatch from indices."""
+    kpatch = empty_patch_locs(num_dim=2, k_max=100.0)
+    ktraj = (torch.rand(3, 500) - 0.5) * 100
+    ktraj[-1, :] = 2.0
+
+    ktraj = torch.cat((ktraj, kpatch), dim=1)
+
+    # Shuffle ktraj along the second dimension (axis=1)
+    perm = torch.randperm(ktraj.shape[1])
+    ktraj = ktraj[:, perm]
+
+    center_ind_exp = torch.where(ktraj[-1] == 0)[0]
+
+    patch = ncgrappa_2.EmptyPatch.from_indices(
+        ktraj=ktraj,
+        patch_indices=[center_ind_exp],
+    )
+
+    assert patch[0].ktraj.data_ptr() == ktraj.data_ptr()
+    assert torch.equal(patch[0].center_ind, center_ind_exp[0])
+
+
+def test_EmptyPatch_init_notempty():
+    kpatch = single_patch_locs(num_dim=2, num_neighbors=10, kernel_size=7, k_max=100.0)
+    ktraj = (torch.rand(3, 500) - 0.5) * 100
+    ktraj[-1, :] = 2.0
+
+    ktraj = torch.cat((ktraj, kpatch), dim=1)
+
+    # Shuffle ktraj along the second dimension (axis=1)
+    perm = torch.randperm(ktraj.shape[1])
+    ktraj = ktraj[:, perm]
+
+    patch_indices = torch.where(ktraj[-1] != 2)[0]
+
+    with pytest.raises(ValueError):
+        ncgrappa_2.EmptyPatch.from_indices(
+            ktraj=ktraj,
+            patch_indices=[patch_indices],
+        )
+
+
 def test_get_patch_indices():
     """Test the get_patch_indices function."""
-    from juart.recon.ncgrappa_2 import _get_patch_indices
 
     num_patches = 10
     num_dim = 2
@@ -243,7 +372,7 @@ def test_get_patch_indices():
     ktraj = torch.cat((ktraj, patch_ind), dim=0)
     ktraj_flat = ktraj.reshape(ktraj.shape[0], -1)
 
-    patch_inds = _get_patch_indices(
+    patch_inds = ncgrappa_2._get_patch_indices(
         ktraj=ktraj_flat[:-1, :],
         kernel_size=torch.tensor(
             [
@@ -268,6 +397,63 @@ def test_get_patch_indices():
         # to the same patch index in the last row
         patch_indices = ktraj_flat[-1, patch]
         assert torch.all(patch_indices == patch_indices[0])
+
+
+def test_get_patch_indices_emtpy():
+    """Test the get_patch_indices function with an ktraj containing empty patches."""
+    num_patches = 10
+    num_dim = 2
+    num_neighbors = 10
+    kernel_size = 7
+
+    patch_loc_list = filled_and_empty_patch_locs(
+        num_filled_patches=num_patches - 1,
+        num_empty_patches=1,
+        num_dim=num_dim,
+        num_neighbors=num_neighbors,
+        kernel_size=kernel_size,
+    )
+
+    # Add a new axis in the first dimension of ktraj
+    for i, patch in enumerate(patch_loc_list):
+        if patch.shape[1] == 1:  # Empty patch
+            patch_ind = i * torch.ones((1, 1), device=patch.device)
+        else:
+            patch_ind = i * torch.ones((1, patch.shape[1]), device=patch.device)
+        patch_loc_list[i] = torch.cat((patch, patch_ind), dim=0)
+
+    ktraj_flat = torch.concat(patch_loc_list, dim=1)
+
+    patch_inds = ncgrappa_2._get_patch_indices(
+        ktraj=ktraj_flat[:-1, :],
+        kernel_size=torch.tensor(
+            [
+                kernel_size,
+            ]
+            * num_dim,
+            device=ktraj_flat.device,
+        ),
+    )
+
+    assert len(patch_inds) == num_patches
+
+    for _, patch in enumerate(patch_inds):
+        # Check if the patch is empty
+        if patch.shape[0] == 1:
+            # Empty patch, only center index
+            assert ktraj_flat[-2, patch[0]] == 0
+        else:
+            center_ind = patch[0]
+            neighbor_inds = patch[1:]
+
+            # Center must be unsampled neighbours must be sampled
+            assert ktraj_flat[-2, center_ind] == 0.0
+            assert torch.all(ktraj_flat[-2, neighbor_inds] == 1.0)
+
+            # Check that all indices in patch correspond
+            # to the same patch index in the last row
+            patch_indices = ktraj_flat[-1, patch]
+            assert torch.all(patch_indices == patch_indices[0])
 
 
 def show_locs():
