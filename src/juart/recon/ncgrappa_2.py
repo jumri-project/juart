@@ -87,14 +87,18 @@ class PatchGroup:
         verbose: int = 0,
     ) -> list["PatchGroup"]:
         """Create a list patch groups from a list of different patches."""
+        start_time = time.time()
+
         patch_groups = []
 
         # Split patches into filled and empty patches
         empty_patches = [p for p in patches if isinstance(p, EmptyPatch)]
         filled_patches = [p for p in patches if isinstance(p, FilledPatch)]
 
+        empty_patch_group = cls(empty_patches)
+
         # Empty patches are always their own group
-        patch_groups.append(empty_patches)
+        patch_groups.append(empty_patch_group)
 
         # 1. Group by the number of neighbors
         neighbour_groups: defaultdict[int, list[FilledPatch]] = defaultdict(list)
@@ -111,7 +115,7 @@ class PatchGroup:
 
             # Create matrix with integer shifts of all pattern
             shift_matrix = torch.stack(
-                [patch.get_shift_pattern(return_int=True) for patch in patch_list],
+                [patch.get_shift_pattern(tol=shift_tolerance) for patch in patch_list],
                 dim=0,
             )
             shift_matrix = shift_matrix.reshape(shift_matrix.shape[0], -1)
@@ -126,12 +130,20 @@ class PatchGroup:
 
             patch_groups.extend([cls(group) for group in shift_groups.values()])
 
-        if verbose > 3:
+        end_time = time.time()
+
+        if verbose > 2:
             print(f"Created {len(patch_groups)} patch groups.")
             print(
                 "[#Neighbors, #Patches]",
                 [(group.num_neighbors, group.num_patches) for group in patch_groups],
             )
+            if verbose > 3:
+                print(
+                    "Time taken to create patch groups: ",
+                    (end_time - start_time) * 1e3,
+                    "ms",
+                )
 
         return patch_groups
 
@@ -147,18 +159,24 @@ class PatchBase:
         verbose: int = 0,
         device: Optional[Union[torch.device, str]] = None,
     ):
-        if isinstance(center_ind, int):
-            self.center_ind = torch.tensor(center_ind, device=ktraj.device)
-        elif isinstance(center_ind, torch.Tensor):
-            self.center_ind = center_ind
-        else:
-            raise TypeError("center_ind must be an int or a torch.Tensor.")
+        self.device = device if device is not None else ktraj.device
 
         self.ktraj = ktraj
         self.do_sift = do_sift
         self.verbose = verbose
-        self.device = device if device is not None else ktraj.device
         self.num_dim = ktraj.shape[0] - 1  # Last dim is sampling mask
+
+        if isinstance(center_ind, int):
+            self.center_ind = torch.tensor([center_ind], device=ktraj.device)
+        elif isinstance(center_ind, torch.Tensor):
+            if center_ind.ndim == 0:
+                self.center_ind = torch.tensor([center_ind], device=ktraj.device)
+            elif center_ind.ndim > 1:
+                raise TypeError("center_ind must be a int or a 1D tensor.")
+            else:
+                self.center_ind = center_ind
+        else:
+            raise TypeError("center_ind must be an int or a 1D tensor.")
 
     @property
     def center_loc(self) -> torch.Tensor:
@@ -168,6 +186,21 @@ class PatchBase:
     @property
     def num_neighbors(self) -> int:
         """Return the number of neighbors."""
+        raise NotImplementedError
+
+    @property
+    def neighbor_inds(self) -> torch.Tensor:
+        """Return the indices of the neighbors."""
+        raise NotImplementedError
+
+    @property
+    def neighbor_locs(self) -> torch.Tensor:
+        """Return the locations of the neighbors."""
+        raise NotImplementedError
+
+    @property
+    def neighbor_shifts(self) -> torch.Tensor:
+        """Return the shifts to the neighbors."""
         raise NotImplementedError
 
     def calibrate(
