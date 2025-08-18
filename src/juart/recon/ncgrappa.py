@@ -648,20 +648,24 @@ class FilledPatch(PatchBase):
 
         # Interpolate coilpair kspace to neighbor shift combinations
         # as trick for phase shift
+
+        # # interp_time = time.time()
         ksp_neigh_shift_comb = bilinear_interpolate_matlab(
             ksp_coilpair, neigh_shift_comb
         )
+        # # print(f"Interpolation time: {(time.time() - interp_time) *1e3} ms")
 
         AhA, AhB = self.get_block_matrices(
             coil_pair_ind=coilpair_ind, ksp_shift_comb=ksp_neigh_shift_comb
         )
-
+        self.weights = solve_hpd_single(AhA, AhB, lam=tik)
         # Solve least squares problem with Tikhonov regularization
-        Eye = torch.eye(AhA.shape[0], dtype=AhA.dtype, device=AhA.device)
-        Tik = (tik * self.num_neighbors) * Eye
+        # Eye = torch.eye(AhA.shape[0], dtype=AhA.dtype, device=AhA.device)
+        # Tik = (tik * self.num_neighbors) * Eye
 
-        # self.weights = (AhA + Tik).pinverse() @ AhB
-        self.weights = torch.linalg.lstsq(AhA + Tik, AhB, driver="gelsy").solution
+        # self.weights = (AhA + Tik).pinverse(rcond=1e-10) @ AhB
+        # self.weights = torch.linalg.lstsq(AhA + Tik, AhB, driver="gelsy").solution
+        # # print(f"Calibration time: {(time.time() - calib_time)*1e3} ms")
 
     def get_neighbor_shift_combinations(self) -> torch.Tensor:
         """Return the neighbor shift combinations."""
@@ -1167,6 +1171,82 @@ def _center_index(
     )
 
     return torch.sum(ctr_sub * multipliers)
+
+
+@torch.no_grad()  # remove this if you need gradients
+def solve_hpd_single(
+    AhA: torch.Tensor,  # (N, N)
+    AhB: torch.Tensor,  # (N, C)
+    lam: float = 0.0,  # Tikhonov (λ >= 0). Use >0 to guarantee PD.
+    symmetrize: bool = True,  # enforce exact Hermitian structure
+    chol_retries=(1e-8, 1e-6, 1e-4),  # extra diagonal loads if initial Cholesky fails
+    eye: torch.Tensor | None = None,  # optional precomputed I_N (reuse in a loop)
+    use_qr_fallback: bool = True,  # QR least-squares fallback if everything fails
+) -> torch.Tensor:
+    """
+    Solves (AhA) X = AhB robustly and quickly for a *single* system.
+
+    Returns:
+        X: (N, C)
+    Notes:
+        - If lam > 0 and AhA ~ A^H A, the matrix
+          is HPD and the fast Cholesky path will be used.
+        - Pass a precomputed identity `eye` (shape (N,N),
+          same dtype/device) when calling in a loop to save allocations.
+    """
+    # --- shape checks ---
+    if AhA.ndim != 2 or AhB.ndim != 2:
+        raise ValueError(
+            f"Expected 2D tensors, got AhA.ndim={AhA.ndim}, AhB.ndim={AhB.ndim}"
+        )
+    N = AhA.shape[0]
+    if AhA.shape[1] != N or AhB.shape[0] != N:
+        raise ValueError(
+            f"Got shapes AhA={tuple(AhA.shape)},"
+            f"AhB={tuple(AhB.shape)}; expected (N,N) and (N,C)"
+        )
+    if AhA.device != AhB.device or AhA.dtype != AhB.dtype:
+        raise ValueError("AhA and AhB must share device and dtype")
+
+    A = AhA.contiguous()
+    B = AhB.contiguous()
+
+    # Enforce exact Hermitian (cheap and safe for normal equations)
+    if symmetrize:
+        A = 0.5 * (A + A.mH)
+
+    # Prepare identity (reuse if provided)
+    if (
+        eye is None
+        or eye.shape != (N, N)
+        or eye.device != A.device
+        or eye.dtype != A.dtype
+    ):
+        eye = torch.eye(N, dtype=A.dtype, device=A.device)
+
+    # Add Tikhonov (can be zero, but >0 recommended)
+    if lam != 0.0:
+        A = A + lam * eye
+
+    # --- Fast path: Cholesky ---
+    L, info = torch.linalg.cholesky_ex(A, upper=False)
+    if int(info.item()) == 0:
+        return torch.cholesky_solve(B, L, upper=False)
+
+    # Retry with a bit more diagonal loading (helps borderline cases)
+    for extra in chol_retries:
+        L, info = torch.linalg.cholesky_ex(A + extra * eye, upper=False)
+        if int(info.item()) == 0:
+            return torch.cholesky_solve(B, L, upper=False)
+
+    # --- Fallbacks ---
+    # Try a general (LU) solve; if that fails (singular), do QR least-squares
+    try:
+        return torch.linalg.solve(A, B)
+    except RuntimeError:
+        if use_qr_fallback:
+            return torch.linalg.lstsq(A, B, driver="gels").solution
+        raise
 
 
 # def calc_coil_pair_img(

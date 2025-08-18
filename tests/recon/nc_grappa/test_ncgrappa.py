@@ -83,6 +83,7 @@ class KtrajTestPatches:
         num_filled_patches: int = 5,
         num_empty_patches: int = 5,
         kernel_size: int = 7,
+        do_sift: bool = False,
         k_max: float = 100.0,
         device: Optional[torch.device] = None,
     ):
@@ -92,6 +93,7 @@ class KtrajTestPatches:
         self.num_empty_patches = num_empty_patches
         self.k_max = k_max
         self.kernel_size = kernel_size
+        self.do_sift = do_sift
         if device is None:
             self.device = torch.device("cpu")
         else:
@@ -158,6 +160,7 @@ class KtrajTestPatches:
                     center_ind=indices[0],
                     neighbor_inds=indices[1:],
                     device=self.device,
+                    do_sift=self.do_sift,
                 )
                 patch_instances.append(patch)
         return patch_instances
@@ -615,10 +618,70 @@ def test_group_patches_init():
 
     grouped_patches = ncgrappa_2.PatchGroup.create_patchgroups(patch_instances)
 
+    # As the patches are created randomly, there are possibly no
+    # patches with the same shift pattern.
     assert (
         len(grouped_patches) == num_filled_patches + 1
     )  # +1 for the empty patch group
-    assert len(grouped_patches[0].patches) == num_emtpy_patches
+    for i, patch_group in enumerate(grouped_patches):
+        if i == 0:
+            assert len(patch_group.patches) == num_emtpy_patches
+            assert patch_group.is_empty
+            assert patch_group.num_neighbors == 0
+
+        else:
+            assert len(patch_group.patches) == 1
+            assert patch_group.num_neighbors == num_neighbors
+            assert patch_group.neighbor_shifts.shape == (num_dim, num_neighbors)
+            assert patch_group.neighbor_indices.shape == (num_neighbors, 1)
+
+
+def test_NonCartGrappa_init():
+    """Test the initialization of NonCartGrappa."""
+    num_filled_patches = 10
+    num_empty_patches = 5
+    num_dim = 2
+    num_cha = 8
+    acs_size = 30
+    num_neighbors = 10
+    kernel_size = 7
+
+    testpatches = KtrajTestPatches(
+        num_dim=num_dim,
+        num_neighbors=num_neighbors,
+        kernel_size=kernel_size,
+        num_filled_patches=num_filled_patches,
+        num_empty_patches=num_empty_patches,
+        device=torch.device("cpu"),
+    )
+
+    patch_locs = testpatches.flat_patch_locs
+    acs = torch.rand(
+        num_cha, acs_size, acs_size, device=patch_locs.device, dtype=torch.complex64
+    )
+
+    ktraj = patch_locs[: num_dim + 1, :]
+    ncgrappa = ncgrappa_2.NonCartesianGrappa(
+        ktraj=ktraj,
+        calib_signal=acs,
+        kernel_size=torch.tensor([7, 7]),
+        do_sift=True,
+        tik=0,
+    )
+
+    assert ncgrappa.ktraj.data_ptr() == ktraj.data_ptr()
+    assert ncgrappa.calib_signal.data_ptr() == acs.data_ptr()
+    assert ncgrappa.kernel_size.shape == (2,)
+    assert ncgrappa.do_sift is True
+    assert ncgrappa.tik == 0
+    assert len(ncgrappa.patch_groups) == num_filled_patches + 1  # +1 for empty patch
+    assert ncgrappa.coilpair_indices.shape == (2, num_cha * (num_cha + 1) // 2)
+
+    exp_resize_factor = acs_size - 1 / ncgrappa.pad_out - 1
+    exp_resize_factor_ten = torch.tensor(
+        [exp_resize_factor, exp_resize_factor], device=ktraj.device, dtype=torch.float32
+    )
+    assert torch.allclose(ncgrappa.pad_resize_factor, exp_resize_factor_ten)
 
 
 def show_locs():
