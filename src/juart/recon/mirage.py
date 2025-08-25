@@ -121,7 +121,7 @@ class MIRAGE(object):
 
         channel_operator = ChannelOperator(
             coil_sensitivities,
-            shape,
+            (num_channels,) + regridded_data.shape,
             normalize=channel_normalize,
             device=device,
         )
