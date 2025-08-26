@@ -39,7 +39,7 @@ class LinearProximalSolver:
             Maximum number of iterations for the conjugate gradient solver
             (default is 1500).
         """
-        self.AHd = AHd.view(torch.float32).ravel()
+        self.AHd = AHd.ravel().view(torch.float32)
         self.AHA = AHA
         self.B = B
         self.BHB = BHB
@@ -71,7 +71,7 @@ class LinearProximalSolver:
 
         self.x, self.residual = conjugate_gradient(
             self.AHA + rho * self.BHB,
-            self.AHd + rho * self.B.T @ v.view(torch.float32).ravel(),
+            self.AHd + rho * self.B.T @ v.ravel().view(torch.float32),
             self.x,
             self.residual,
             self.maxiter,

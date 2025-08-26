@@ -207,6 +207,6 @@ class ADMM:
                 )
                 break
 
-        log.write(self.results["message"])
+        # log.write(self.results["message"])
 
         return self.results

@@ -17,7 +17,7 @@ from ..parim.gcc import (
 from ..recon.grappa import grappa
 
 # from .aux import espirit_sense, sake_espirit
-from .aux import sake_espirit
+from .aux import sake_espirit, sake_espirit_multicontrast
 
 # Global variables that the worker processes will access.
 # These are set via the worker_init function.
@@ -319,6 +319,7 @@ class KSpaceData:
         shared_kdata_dtype,
         shared_sensmaps_shape,
         shared_sensmaps_dtype,
+        multi_contrast,
     ):
         # Reconnect to shared memory
         kdata = torch.frombuffer(
@@ -330,10 +331,16 @@ class KSpaceData:
             shared_sensmaps_buffer, dtype=shared_sensmaps_dtype
         ).reshape(shared_sensmaps_shape)
 
-        sensmaps[:, :, :, :, index : index + 1, :, :] = sake_espirit(
-            kdata[:, :, :, :, index : index + 1, :, :],
-            shared_ktraj,
-        )
+        if multi_contrast:
+            sensmaps[:, :, :, :, index : index + 1, :, :] = sake_espirit_multicontrast(
+                kdata[:, :, :, :, index : index + 1, :, :],
+                shared_ktraj,
+            )
+        else:
+            sensmaps[:, :, :, :, index : index + 1, :, :] = sake_espirit(
+                kdata[:, :, :, :, index : index + 1, :, :],
+                shared_ktraj,
+            )
 
     def get_sensmaps(
         self,
@@ -341,6 +348,7 @@ class KSpaceData:
         sensmaps_shape,
         sensmaps_dtype=torch.complex64,
         buffer_dtype=ctypes.c_double,
+        multi_contrast=False,
     ):
         NCha, NCol, NLin, NPar, NSli, NSet, NEco = self.kdata_shape
 
@@ -364,6 +372,7 @@ class KSpaceData:
             shared_kdata_dtype=self.kdata_dtype,
             shared_sensmaps_shape=sensmaps_shape,
             shared_sensmaps_dtype=sensmaps_dtype,
+            multi_contrast=multi_contrast,
         )
 
         KSpaceData.run_task(
