@@ -13,8 +13,8 @@ class AuthJobSubmissionClient(JobSubmissionClient):
         username,
         password,
         verify=True,
-        token_url="https://keycloak.cloud.inm-4.fz-juelich.de/auth/realms/kube.fz-juelich.de/protocol/openid-connect/token",
-        introspection_url="https://keycloak.cloud.inm-4.fz-juelich.de/auth/realms/kube.fz-juelich.de/protocol/openid-connect/token/introspect",
+        token_url="",
+        introspection_url="",
         verbose=False,
     ):
         self.client_id = client_id
