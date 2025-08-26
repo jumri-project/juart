@@ -7,13 +7,13 @@ Created on Thu Nov 26 16:28:00 2020
 """
 
 import math
+
 import numpy as np
 from scipy import special as sp
 
 
 def getSphericalHarmonics(xyz, maxOrder):
-
-    r = np.sqrt(xyz[0, :]**2 + xyz[1, :]**2 + xyz[2, :]**2)
+    r = np.sqrt(xyz[0, :] ** 2 + xyz[1, :] ** 2 + xyz[2, :] ** 2)
     theta = np.arccos(xyz[2, :] / r)
     phi = np.arctan2(xyz[1, :], xyz[0, :])
 
@@ -23,7 +23,7 @@ def getSphericalHarmonics(xyz, maxOrder):
     rtp[2, :] = phi
 
     numPoints = xyz.shape[1]
-    numHarmonics = (maxOrder+1)**2
+    numHarmonics = (maxOrder + 1) ** 2
     sphericalHarmonics = np.zeros((numHarmonics, numPoints))
 
     sphericalHarmonics[0, :] = 1.0
@@ -33,7 +33,7 @@ def getSphericalHarmonics(xyz, maxOrder):
         nthOrderHarmonics = calculateHarmonics(n, rtp)
 
         idxLo = n**2
-        idxHi = idxLo + 2*n + 1
+        idxHi = idxLo + 2 * n + 1
 
         sphericalHarmonics[idxLo:idxHi, :] = nthOrderHarmonics
 
@@ -43,34 +43,33 @@ def getSphericalHarmonics(xyz, maxOrder):
 
 
 def calculateHarmonics(n, rtp):
-
     u = np.cos(rtp[1, :])
     P = legendre(n, u)
     rn = np.power(rtp[0, :], n)
 
     Fdo = 1
     m = 0
-    Fdo1 = Fdo * math.factorial(n-m) / math.factorial(n+m)
+    Fdo1 = Fdo * math.factorial(n - m) / math.factorial(n + m)
     # Pdo = P[m, :]
     Pdo = P[m]
 
-    numTerms = 2*n + 1
+    numTerms = 2 * n + 1
     numPoints = rtp.shape[1]
     harmonics = np.zeros([numTerms, numPoints])
 
     harmonics[0, :] = Fdo1 * rn * Pdo
 
     for idx in range(n):
-        m = idx+1
+        m = idx + 1
 
-        angularc = np.cos(m*rtp[2, :])
-        angulars = np.sin(m*rtp[2, :])
+        angularc = np.cos(m * rtp[2, :])
+        angulars = np.sin(m * rtp[2, :])
 
         Fdo = Fdo * 2 * m
-        Fdo1 = Fdo * math.factorial(n-m) / math.factorial(n+m)
+        Fdo1 = Fdo * math.factorial(n - m) / math.factorial(n + m)
 
-        harmonics[2*m-1, :] = Fdo1 * rn * P[m] * angularc
-        harmonics[2*m-0, :] = Fdo1 * rn * P[m] * angulars
+        harmonics[2 * m - 1, :] = Fdo1 * rn * P[m] * angularc
+        harmonics[2 * m - 0, :] = Fdo1 * rn * P[m] * angulars
         # harmonics[2*m-1, :] = Fdo1 * rn * P[m, :] * angularc
         # harmonics[2*m-0, :] = Fdo1 * rn * P[m, :] * angulars
 
@@ -79,7 +78,7 @@ def calculateHarmonics(n, rtp):
 
 def legendre(n, X):
     res = []
-    for m in range(n+1):
+    for m in range(n + 1):
         res.append(sp.lpmv(m, n, X))
     return res
 

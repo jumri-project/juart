@@ -10,18 +10,17 @@ import numpy as np
 
 
 def getVoxelCoordinates(scanParameters):
-
-    sliceGap = scanParameters['sliceGap']
-    fieldOfView = scanParameters['fieldOfView']
-    voxelSize = scanParameters['voxelSize']
-    stackCenter = scanParameters['stackCenter']
-    rotationMatrix = scanParameters['rotationInfo']['rotationMatrix']
-    stackOrientation = scanParameters['stackNormal']['orientation']
-    matrixSize = scanParameters['matrixSize'][0:3]
+    sliceGap = scanParameters["sliceGap"]
+    fieldOfView = scanParameters["fieldOfView"]
+    voxelSize = scanParameters["voxelSize"]
+    stackCenter = scanParameters["stackCenter"]
+    rotationMatrix = scanParameters["rotationInfo"]["rotationMatrix"]
+    stackOrientation = scanParameters["stackNormal"]["orientation"]
+    matrixSize = scanParameters["matrixSize"][0:3]
 
     coordsDelta = voxelSize + [0, 0, sliceGap]
-    coordsStart = (-fieldOfView+voxelSize)/2
-    coordsStop = (fieldOfView-voxelSize)/2 + coordsDelta
+    coordsStart = (-fieldOfView + voxelSize) / 2
+    coordsStop = (fieldOfView - voxelSize) / 2 + coordsDelta
 
     xvec = np.arange(coordsStart[0], coordsStop[0], coordsDelta[0])
     yvec = np.arange(coordsStart[1], coordsStop[1], coordsDelta[1])
@@ -33,16 +32,20 @@ def getVoxelCoordinates(scanParameters):
     Y = coordinateArrays[1]
     Z = coordinateArrays[2]
 
-    xyz = np.vstack((X.reshape(1, X.size, order='F'),
-                     Y.reshape(1, Y.size, order='F'),
-                     Z.reshape(1, Z.size, order='F')))
+    xyz = np.vstack(
+        (
+            X.reshape(1, X.size, order="F"),
+            Y.reshape(1, Y.size, order="F"),
+            Z.reshape(1, Z.size, order="F"),
+        )
+    )
 
     voxelCoordinates = rotationMatrix @ xyz + stackCenter[:, np.newaxis]
 
     # Above OK
-    X = np.reshape(voxelCoordinates[0, :], matrixSize, order='F')
-    Y = np.reshape(voxelCoordinates[1, :], matrixSize, order='F')
-    Z = np.reshape(voxelCoordinates[2, :], matrixSize, order='F')
+    X = np.reshape(voxelCoordinates[0, :], matrixSize, order="F")
+    Y = np.reshape(voxelCoordinates[1, :], matrixSize, order="F")
+    Z = np.reshape(voxelCoordinates[2, :], matrixSize, order="F")
 
     dX1 = X[-1, 0, 0] - X[0, 0, 0]
     dX2 = X[0, -1, 0] - X[0, 0, 0]
@@ -59,8 +62,7 @@ def getVoxelCoordinates(scanParameters):
     dZ3 = Z[0, 0, -1] - Z[0, 0, 0]
     slopeZ = np.array((dZ1, dZ2, dZ3)) / matrixSize
 
-    if stackOrientation == 'transversal':
-
+    if stackOrientation == "transversal":
         if np.abs(slopeX[0]) > np.abs(slopeY[0]):
             X = np.transpose(X, (1, 0, 2))
             slopeX = slopeX[[1, 0, 2]]
@@ -84,18 +86,18 @@ def getVoxelCoordinates(scanParameters):
             Y = np.flip(Y, 2)
             Z = np.flip(Z, 2)
 
-    elif stackOrientation == 'sagittal':
-        print('Not implemented yet.')
+    elif stackOrientation == "sagittal":
+        print("Not implemented yet.")
 
-    elif stackOrientation == 'coronal':
-        print('Not implemented yet.')
+    elif stackOrientation == "coronal":
+        print("Not implemented yet.")
 
     xyz.fill(0)
-    xyz[0, :] = X.ravel(order='F')
-    xyz[1, :] = Y.ravel(order='F')
-    xyz[2, :] = Z.ravel(order='F')
+    xyz[0, :] = X.ravel(order="F")
+    xyz[1, :] = Y.ravel(order="F")
+    xyz[2, :] = Z.ravel(order="F")
 
-    voxels = {'x': X, 'y': Y, 'z': Z}
+    voxels = {"x": X, "y": Y, "z": Z}
 
     return voxels, xyz
 

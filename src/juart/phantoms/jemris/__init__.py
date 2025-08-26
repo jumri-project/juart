@@ -1,20 +1,20 @@
 import os
-import h5py
 
+import h5py
 import numpy as np
 
 path = os.path.split(__file__)[0]
 
 
 def jemris_parmaps():
+    f = h5py.File(os.path.join(path, "brain80.h5"), mode="r")
 
-    f = h5py.File(os.path.join(path, 'brain80.h5'), mode='r')
-
-    x = f['/sample/data']
+    x = f["/sample/data"]
     x = np.array(x)[0, :, :, :]
 
-    x = np.pad(x, (((256 - x.shape[0]) // 2,), ((256 - x.shape[1]) // 2, ), (0, )),
-               mode='edge')
+    x = np.pad(
+        x, (((256 - x.shape[0]) // 2,), ((256 - x.shape[1]) // 2,), (0,)), mode="edge"
+    )
 
     x = np.rot90(x, k=2)
 

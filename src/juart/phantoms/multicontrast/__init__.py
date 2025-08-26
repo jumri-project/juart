@@ -3,14 +3,12 @@
 
 import numpy as np
 
-from phantoms.jemris import jemris_parmaps
+from ..jemris import jemris_parmaps
 
 
 class BrainPhantom1D(object):
-
     def __init__(self, t, relaxmap=1, fieldmap=1):
-
-        print('Constructing Numerical Brain Phantom ...')
+        print("Constructing Numerical Brain Phantom ...")
 
         # Load JEMRIS parameter maps
         M0, _, _, R2s, FM = jemris_parmaps()
@@ -28,10 +26,8 @@ class BrainPhantom1D(object):
 
 
 class BrainPhantom2D(object):
-
     def __init__(self, TP, TE):
-
-        print('Constructing Numerical Brain Phantom ...')
+        print("Constructing Numerical Brain Phantom ...")
 
         # Load JEMRIS parameter maps
         M0, R1, _, R2s, FM = jemris_parmaps()
@@ -56,10 +52,8 @@ class BrainPhantom2D(object):
 
 
 class MyelinBrainPhantom(object):
-
     def __init__(self, t):
-
-        print('Constructing Numerical Myelin Brain Phantom ...')
+        print("Constructing Numerical Myelin Brain Phantom ...")
 
         # ---------------------------------------------------------------------
         # Load JEMRIS parameter maps
@@ -84,16 +78,14 @@ class MyelinBrainPhantom(object):
         # ---------------------------------------------------------------------
         # Remove this fraction from the IE pool
         M0[self.MASK_WM] = 0.73 - 0.2
-#        M0 = M0 - M0_WM
+        #        M0 = M0 - M0_WM
         # ---------------------------------------------------------------------
 
         # ---------------------------------------------------------------------
         # Mono-exponential MEGE signal equation
-        s = M0[:, :, None] * \
-            np.exp(-t[None, None, :] * R2s[..., None])
+        s = M0[:, :, None] * np.exp(-t[None, None, :] * R2s[..., None])
 
-        s = s + M0_WM[:, :, None] * \
-            np.exp(-t[None, None, :] * R2s_WM[..., None])
+        s = s + M0_WM[:, :, None] * np.exp(-t[None, None, :] * R2s_WM[..., None])
         # ---------------------------------------------------------------------
 
         self.M0 = np.concatenate((M0, M0_WM), axis=1)
@@ -103,13 +95,10 @@ class MyelinBrainPhantom(object):
 
 
 class CompartmentPhantom(object):
-
     def __init__(self, t):
+        print("Constructing Numerical Multi-Compartment Phantom ...")
 
-        print('Constructing Numerical Multi-Compartment Phantom ...')
-
-        xv, yv = np.meshgrid(np.linspace(-.5, .5, 256),
-                             np.linspace(-.5, .5, 256))
+        xv, yv = np.meshgrid(np.linspace(-0.5, 0.5, 256), np.linspace(-0.5, 0.5, 256))
 
         mask = np.zeros((256, 256))
 
@@ -118,7 +107,7 @@ class CompartmentPhantom(object):
         for i in range(2, 5):
             xc = xv[128, 128] + 0.15 * np.sin(2 * np.pi * (i - 1) / 3)
             yc = yv[128, 128] - 0.15 * np.cos(2 * np.pi * (i - 1) / 3)
-            mask[((xv - xc)**2 + (yv - yc)**2) < 0.1**2] = i
+            mask[((xv - xc) ** 2 + (yv - yc) ** 2) < 0.1**2] = i
 
         M0 = np.zeros((3, 256, 256), dtype=np.complex)
         R2s = np.zeros((3, 256, 256), dtype=np.complex)
@@ -132,8 +121,7 @@ class CompartmentPhantom(object):
         M0[2, np.in1d(mask, [3, 4]).reshape((256, 256))] = 0.2
         R2s[2, np.in1d(mask, [3, 4]).reshape((256, 256))] = 1 / 15 + 0.2j
 
-        s = np.sum(M0[..., None] * np.exp(-R2s[..., None] * t[None, ...]),
-                   axis=0)
+        s = np.sum(M0[..., None] * np.exp(-R2s[..., None] * t[None, ...]), axis=0)
 
         self.M0 = np.concatenate(M0, axis=1)
         self.R2s = np.concatenate(R2s, axis=1)
