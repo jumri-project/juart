@@ -232,8 +232,12 @@ class ImageStore:
         )
 
         images = images.cpu().numpy()
+
+        print("Image Store", images.shape)
+        # images.shape (256, 256, 1, 19, 9)
+
         images = images[:, :, :, None, :, :]
-        images = np.transpose(images, (1, 2, 3, 0, 4, 5))
+        # images = np.transpose(images, (1, 2, 3, 0, 4, 5))
 
         self.group[self.array_name][
             :, :, :, self.slices[slice_index] : self.slices[slice_index] + 1, :, :

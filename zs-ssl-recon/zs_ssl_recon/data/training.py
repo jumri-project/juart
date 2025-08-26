@@ -119,7 +119,9 @@ class DatasetTraining(torch.utils.data.Dataset):
         )
 
         kspace_mask = torch.zeros(
-            (len(self.split_fractions), 1, nK, nTI, nTE), dtype=torch.float32
+            (len(self.split_fractions), 1, nK, nTI, nTE),
+            dtype=torch.float32,
+            device=self.device,
         )
 
         for iTI in range(nTI):

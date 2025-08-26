@@ -1,4 +1,3 @@
-
 import torch
 
 from ..utils.dist import gather_and_average_losses

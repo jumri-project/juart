@@ -68,6 +68,7 @@ class ToeplitzOperator(nn.Module):
         self.kernel = nonuniform_transfer_function(
             kspace_trajectory,
             (1, 256, 256, 1, 19, 9),
+            weights=kspace_mask,
         )
         self.kernel = self.kernel / 4
 
