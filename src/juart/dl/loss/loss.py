@@ -217,7 +217,7 @@ def centralized_loss(x, x_reference, order, dim=None, norm=True, group=None):
 class KSpaceLoss(nn.Module):
     def __init__(
         self,
-        im_size,
+        shape,
         weights=(0.1, 0.1),
         dim=None,
         normalized_loss=True,
@@ -228,6 +228,7 @@ class KSpaceLoss(nn.Module):
     ):
         super().__init__()
 
+        self.shape = shape
         self.weights = weights
         self.dim = dim
         self.normalized_loss = normalized_loss
@@ -565,7 +566,7 @@ class CasoratiLoss(nn.Module):
 class JointLoss(nn.Module):
     def __init__(
         self,
-        im_size,
+        shape,
         kernel_size,
         weights_kspace_loss=(0.3, 0.3),
         weights_ispace_loss=(0.15, 0.15),
@@ -585,7 +586,7 @@ class JointLoss(nn.Module):
         super().__init__()
 
         self.kspace_loss = KSpaceLoss(
-            im_size,
+            shape,
             weights=weights_kspace_loss,
             dim=dim_kspace_loss,
             normalized_loss=normalized_loss,

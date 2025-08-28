@@ -56,12 +56,10 @@ class LookaheadModel(AveragedModel):
 class UnrolledNet(nn.Module):
     def __init__(
         self,
-        im_size,
-        grid_size=None,
+        shape,
         CG_Iter=10,
         num_unroll_blocks=10,
         num_res_blocks=15,
-        contrasts=1,
         features=128,
         weight_standardization=False,
         spectral_normalization=False,
@@ -76,6 +74,9 @@ class UnrolledNet(nn.Module):
     ):
         super().__init__()
 
+        nX, nY, nZ, nTI, nTE = shape
+        contrasts = nTI * nTE
+
         self.regularizer = ResNet(
             contrasts=contrasts,
             features=features,
@@ -89,8 +90,7 @@ class UnrolledNet(nn.Module):
             dtype=dtype,
         )
         self.dc = DataConsistency(
-            im_size,
-            grid_size=grid_size,
+            shape,
             niter=CG_Iter,
             lamda_start=lamda_start,
             timing_level=timing_level - 1,
@@ -141,8 +141,7 @@ class UnrolledNet(nn.Module):
 class SingleContrastUnrolledNet(nn.Module):
     def __init__(
         self,
-        im_size,
-        grid_size=None,
+        shape,
         CG_Iter=10,
         num_unroll_blocks=10,
         num_res_blocks=15,
@@ -161,15 +160,16 @@ class SingleContrastUnrolledNet(nn.Module):
     ):
         super().__init__()
 
+        nX, nY, nZ, nTI, nTE = shape
+        contrasts = nTI * nTE
+
         self.unrollednets = nn.ModuleList(
             [
                 UnrolledNet(
-                    im_size,
-                    grid_size=grid_size,
+                    (nX, nY, nZ, 1, 1),
                     CG_Iter=CG_Iter,
                     num_unroll_blocks=num_unroll_blocks,
                     num_res_blocks=num_res_blocks,
-                    contrasts=1,
                     features=features,
                     weight_standardization=weight_standardization,
                     spectral_normalization=spectral_normalization,
@@ -201,6 +201,8 @@ class SingleContrastUnrolledNet(nn.Module):
         sensitivity_maps: torch.Tensor = None,
     ) -> torch.Tensor:
         nTI, nTE = images_regridded.shape[-2:]
+
+        nX, nY, nZ, nTI, nTE = images_regridded.shape
 
         images = images_regridded.clone().detach()
 

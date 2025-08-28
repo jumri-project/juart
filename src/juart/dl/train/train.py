@@ -80,7 +80,7 @@ def train_loop_per_worker(options):
 
     nD = len(options["datasets"])
     nS = len(options["slices"])
-    nX, nY, nTI, nTE = options["shape"]
+    nX, nY, nZ, nTI, nTE = options["shape"]
 
     num_epochs = options["epochs"]
 
@@ -106,8 +106,7 @@ def train_loop_per_worker(options):
 
     if options["groups"] == 1:
         model = UnrolledNet(
-            (nX, nY),
-            contrasts=nTI * nTE,
+            shape,
             features=options["features"],
             CG_Iter=options["CG_Iter"],
             num_unroll_blocks=options["num_unroll_blocks"],
@@ -121,8 +120,7 @@ def train_loop_per_worker(options):
         )
     else:
         model = SingleContrastUnrolledNet(
-            (nX, nY),
-            contrasts=nTI * nTE,
+            shape,
             features=options["features"],
             CG_Iter=options["CG_Iter"],
             num_unroll_blocks=options["num_unroll_blocks"],
@@ -135,7 +133,7 @@ def train_loop_per_worker(options):
             device=device,
         )
     loss_fn = JointLoss(
-        (nX, nY),
+        shape,
         (3, 3),
         weights_kspace_loss=options["weight_kspace_loss"],
         weights_ispace_loss=options["weight_ispace_loss"],

@@ -43,15 +43,13 @@ def conj_grad(
 class ToeplitzOperator(nn.Module):
     def __init__(
         self,
-        im_size,
-        grid_size=None,
+        shape,
         device=None,
         dtype=torch.complex64,
     ):
         super().__init__()
 
-        self.im_size = im_size
-        self.grid_size = grid_size
+        self.shape = shape
         self.device = device
         self.dtype = dtype
 
@@ -64,10 +62,9 @@ class ToeplitzOperator(nn.Module):
         kspace_mask: torch.Tensor = None,
         sensitivity_maps: torch.Tensor = None,
     ):
-        # TODO: Fix hard coding of shape
         self.kernel = nonuniform_transfer_function(
             kspace_trajectory,
-            (1, 256, 256, 1, 19, 9),
+            (1, ) + self.shape,
             weights=kspace_mask,
         )
         self.kernel = self.kernel / 4
@@ -111,8 +108,7 @@ class ToeplitzOperator(nn.Module):
 class DataConsistency(nn.Module):
     def __init__(
         self,
-        im_size,
-        grid_size=None,
+        shape,
         niter=10,
         lamda_start=0.05,
         timing_level=0,
@@ -123,10 +119,16 @@ class DataConsistency(nn.Module):
         super().__init__()
 
         self.toep_ob = ToeplitzOperator(
-            im_size, grid_size=grid_size, device=device, dtype=dtype
+            shape,
+            device=device,
+            dtype=dtype,
         )
         self.lam = nn.Parameter(
-            torch.tensor(lamda_start, dtype=torch.float32, device=device)
+            torch.tensor(
+                lamda_start, 
+                 dtype=torch.float32, 
+                 device=device,
+            )
         )
         self.niter = niter
         self.timing_level = timing_level
@@ -167,7 +169,10 @@ class DataConsistency(nn.Module):
         images = images.to(self.device)
 
         images = conj_grad(
-            self.toep_ob, self.images_regridded + self.lam * images, images, self.niter
+            self.toep_ob,
+            self.images_regridded + self.lam * images,
+            images,
+            self.niter,
         )
 
         return images
