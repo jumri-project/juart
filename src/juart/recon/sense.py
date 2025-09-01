@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 import torch
 
@@ -178,6 +178,7 @@ class SENSE:
         transfer_function: torch.Tensor,
         channel_normalize: bool = True,
         maxiter: int = 15,
+        axes: Tuple[int] = (1, 2),
         verbose: bool = False,
         callback: Optional[Callable] = None,
         device: Optional[torch.device] = None,
@@ -221,7 +222,7 @@ class SENSE:
         transfer_function_operator = TransferFunctionOperator(
             transfer_function,
             (num_channels,) + regridded_data.shape,
-            axes=(1, 2),
+            axes=axes,
             device=device,
         )
 

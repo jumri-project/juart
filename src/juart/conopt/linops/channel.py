@@ -37,6 +37,9 @@ class ChannelOperator(LinearOperator):
 
         # Number of channels (coils)
         nC = coil_sensitivities.shape[0]
+        
+        coil_sensitivities = coil_sensitivities.unsqueeze(-1)
+        coil_sensitivities = coil_sensitivities.expand(-1, -1, -1, -1, *add_axes)
 
         # Device and dtype
         self.device = device
