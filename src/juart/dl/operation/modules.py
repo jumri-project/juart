@@ -1,4 +1,5 @@
 import torch
+from typing import Tuple
 
 from ..utils.dist import gather_and_average_losses
 

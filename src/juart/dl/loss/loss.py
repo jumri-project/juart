@@ -248,7 +248,6 @@ class KSpaceLoss(nn.Module):
         sensitivity_maps,
     ):
         loss = torch.tensor(0, device=self.device, dtype=torch.float32)
-
         if max(self.weights) > 0:
             images_reconstructed = images_reconstructed.to(self.device)
             kspace_trajectory = kspace_trajectory.to(self.device)
@@ -266,7 +265,7 @@ class KSpaceLoss(nn.Module):
             )
 
             kspace_data_reconstructed = kspace_data_reconstructed * kspace_mask
-
+            
             kspace_data_reference = kspace_data * kspace_mask
 
             print(

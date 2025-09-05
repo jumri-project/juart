@@ -1,4 +1,5 @@
 import itertools
+from typing import Tuple
 
 import torch
 import torch.distributed as dist
@@ -69,13 +70,56 @@ class UnrolledNet(nn.Module):
         disable_progress_bar=False,
         timing_level=0,
         validation_level=0,
+        kernel_size: Tuple[int] = (3,3),
+        axes: Tuple[int] = (1,2),
         device=None,
         dtype=torch.complex64,
     ):
+        """
+        Initializes an UnrollNet as a neural Network with a number of ResNet Layers (ConvLayers) and a data consistency layer.
+    
+        Parameters
+        ----------
+        shape : torch.Tensor, shape (nX, nY, nZ, nTI, nTE)
+            Shape of the image data.
+        CG_Iter : int, optional
+            Number of the iterations in the conjugate gradient (Data Consistency) term
+        num_unroll_blocks : int, optional
+            Number of iterations in the loop of data consistency term and regularization
+            term (default is 10).
+        num_res_blocks : int, optional
+            Number of ResNetBlocks that should be added to the second layer of the 
+            ResNet (default is 15).
+        features : int, optional
+            Number of the features of the neural network (default is 128).
+        weight_standardization : bool, optional
+            Activates the weight standardization that sets the mean of the weights to 0 
+            and their deviation to 1(default is False).
+        spectral_normalization: bool, optional
+            Activates the spectral normalization (default is False).
+        phase_normalization: bool, optional
+            normalizes the signals phase (default is False).
+        disable_progress_bar: bool, optional
+            Disable the progress bar output (default is False).
+        axes: tuple[int], optional
+            Defines the dimension of the model (default is (1,2) for 2D; Change to
+            (1,2,3) for 3D)
+        activation: str, optional
+            defines the kind of activation function (default is "ReLu")
+        kernel_size: Tuple[int], optional
+            changes the size of the kernel used in the convolutional layers
+            (default is (3,3))
+        device : torch.device, optional
+            Device on which to perform the computation
+            (default is None, which uses the current device).
+
+        NOTE: This function is under development and may not be fully functional yet.
+    """
         super().__init__()
 
         nX, nY, nZ, nTI, nTE = shape
         contrasts = nTI * nTE
+        dim = len(axes)
 
         self.regularizer = ResNet(
             contrasts=contrasts,
@@ -84,8 +128,10 @@ class UnrolledNet(nn.Module):
             weight_standardization=weight_standardization,
             spectral_normalization=spectral_normalization,
             activation=activation,
+            kernel_size = kernel_size,
             timing_level=timing_level - 1,
             validation_level=validation_level - 1,
+            dim = dim,
             device=device,
             dtype=dtype,
         )
@@ -95,6 +141,7 @@ class UnrolledNet(nn.Module):
             lamda_start=lamda_start,
             timing_level=timing_level - 1,
             validation_level=validation_level - 1,
+            axes = axes,
             device=device,
             dtype=dtype,
         )
@@ -123,7 +170,7 @@ class UnrolledNet(nn.Module):
             images_regridded,
             kspace_trajectory,
             kspace_mask=kspace_mask,
-            sensitivity_maps=sensitivity_maps,
+            sensitivity_maps=sensitivity_maps
         )
 
         images = images_regridded.clone().detach()

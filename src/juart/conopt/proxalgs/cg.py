@@ -14,7 +14,7 @@ def conjugate_gradient(
     maxiter: int,
     eps: float = 1e-10,
     verbose: bool = False,
-    progressbar: bool = False,
+    progressbar: bool,
 ) -> torch.Tensor:
     """
     Conjugate Gradient solver using PyTorch.

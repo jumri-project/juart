@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 from torch import jit
 
+from typing import Tuple
+from tqdm import tqdm
+
 from ..utils.fourier import apply_transfer_function, nonuniform_transfer_function
 from ..utils.validation import timing_layer, validation_layer
 
@@ -19,6 +22,7 @@ def conj_grad(
     b: torch.Tensor,
     x: torch.Tensor,
     niter: int,
+    verbose: bool = True
 ) -> torch.Tensor:
     r = b - A(x)
     p = r
@@ -26,7 +30,13 @@ def conj_grad(
     rsnot = inner_product(r, r)
     rsold, rsnew = rsnot, rsnot
 
-    for _ in range(niter):
+    log = tqdm(
+        total=niter,
+        desc="CG",
+        disable=(not verbose),
+    )
+
+    for iter in range(niter):
         Ap = A(p)
         pAp = inner_product(p, Ap)
         alpha = rsold / pAp
@@ -37,6 +47,12 @@ def conj_grad(
         rsold = rsnew
         p = r + beta * p
 
+        str_out = "[CG] "
+        str_out += f"Iter: {iter:0>{len(str(niter))}} "
+        str_out += f"Res: {rsnew:.2E} "
+        log.set_description_str(str_out)
+        log.update(1)
+
     return x
 
 
@@ -44,11 +60,13 @@ class ToeplitzOperator(nn.Module):
     def __init__(
         self,
         shape,
+        axes: Tuple[int] = (1, 2),
         device=None,
         dtype=torch.complex64,
     ):
         super().__init__()
 
+        self.axes = axes
         self.shape = shape
         self.device = device
         self.dtype = dtype
@@ -93,7 +111,7 @@ class ToeplitzOperator(nn.Module):
             v = apply_transfer_function(
                 v,
                 self.kernel,
-                (1, 2),
+                axes = self.axes,
             )
 
             v = v * torch.conj(sensitivity_maps_set[..., None, None])
@@ -109,17 +127,20 @@ class DataConsistency(nn.Module):
     def __init__(
         self,
         shape,
+        axes: Tuple[int] = (1, 2),
         niter=10,
         lamda_start=0.05,
         timing_level=0,
         validation_level=0,
         device=None,
         dtype=torch.complex64,
+        verbose: bool = False
     ):
         super().__init__()
 
         self.toep_ob = ToeplitzOperator(
             shape,
+            axes = axes,
             device=device,
             dtype=dtype,
         )
@@ -135,6 +156,7 @@ class DataConsistency(nn.Module):
         self.validation_level = validation_level
         self.device = device
         self.dtype = dtype
+        self.verbose = verbose
 
     @timing_layer
     @validation_layer
@@ -173,6 +195,7 @@ class DataConsistency(nn.Module):
             self.images_regridded + self.lam * images,
             images,
             self.niter,
+            verbose = self.verbose
         )
 
         return images
