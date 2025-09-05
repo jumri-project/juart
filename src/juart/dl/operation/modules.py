@@ -23,13 +23,14 @@ def training(
             # Prepare data
             data = dataset[index]
 
+            print(f"reading data")
             images_regridded = data["images_regridded"].to(device)
             kspace_trajectory = data["kspace_trajectory"].to(device)
             kspace_data = data["kspace_data"].to(device)
             kspace_mask_source = data["kspace_mask_source"].to(device)
             kspace_mask_target = data["kspace_mask_target"].to(device)
             sensitivity_maps = data["sensitivity_maps"].to(device)
-
+            print("reading data done -> model initialization")
             # Forward path
             images_reconstructed = model(
                 images_regridded,
@@ -37,7 +38,7 @@ def training(
                 kspace_mask=kspace_mask_source,
                 sensitivity_maps=sensitivity_maps,
             )
-
+            print("model initialization done -> loss fn initialization")
             # Loss
             loss = loss_fn(
                 images_reconstructed,
@@ -47,10 +48,10 @@ def training(
                 kspace_mask_target,
                 sensitivity_maps,
             )
-
+            print("loss fn initialization done -> compute backward pass")
             # Backpropagation
             loss.backward()
-
+            print("compute backward pass done -> compute accumulator")
             # Accumulate gradients
             accumulator.accumulate()
 
@@ -65,6 +66,7 @@ def training(
         averaged_losses = gather_and_average_losses(
             torch.tensor(losses), group=group, device=device
         )
+        print("done with training()")
 
     return averaged_losses.tolist()
 
