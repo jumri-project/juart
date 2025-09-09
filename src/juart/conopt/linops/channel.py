@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 
@@ -14,7 +14,7 @@ class ChannelOperator(LinearOperator):
     def __init__(
         self,
         coil_sensitivities: torch.Tensor,
-        data_shape: Tuple[int, ...],
+        data_shape: tuple[int, ...],
         normalize: bool = True,
         device: Optional[torch.device] = None,
     ):
@@ -37,7 +37,7 @@ class ChannelOperator(LinearOperator):
 
         # Number of channels (coils)
         nC = coil_sensitivities.shape[0]
-        
+
         coil_sensitivities = coil_sensitivities.unsqueeze(-1)
         coil_sensitivities = coil_sensitivities.expand(-1, -1, -1, -1, *add_axes)
 

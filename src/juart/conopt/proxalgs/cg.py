@@ -14,7 +14,6 @@ def conjugate_gradient(
     maxiter: int,
     eps: float = 1e-10,
     verbose: bool = False,
-    progressbar: bool,
 ) -> torch.Tensor:
     """
     Conjugate Gradient solver using PyTorch.
@@ -59,7 +58,7 @@ def conjugate_gradient(
         rsold = rsnew
 
         str_out = "[CG] "
-        str_out += f"Iter: {iteration:0>{len(str(maxiter))}} "
+        str_out += f"Iter: {(iteration + 1):0>{len(str(maxiter))}} "
         str_out += f"Res: {rsnew:.2E} "
         log.set_description_str(str_out)
         log.update(1)

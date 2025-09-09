@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Union
 
 import torch
 
@@ -7,6 +7,7 @@ from ..conopt.functional.fourier import (
     nonuniform_fourier_transform_adjoint,
 )
 from ..conopt.linops.channel import ChannelOperator
+from ..conopt.linops.identity import IdentityOperator
 from ..conopt.linops.tf import TransferFunctionOperator
 from ..conopt.proxalgs.cg import LinearSolver
 from ..conopt.tfs.fourier import (
@@ -15,10 +16,11 @@ from ..conopt.tfs.fourier import (
 
 
 def cgsense(
-    ksp_data: torch.Tensor,
+    ksp: torch.Tensor,
     ktraj: torch.Tensor,
-    coil_sensitivities: torch.Tensor,
+    coilsens: torch.Tensor,
     maxiter: int = 20,
+    l2_reg: float = 0.0,
     channel_normalize: bool = True,
     verbose: bool = False,
     device: Optional[torch.device] = None,
@@ -29,18 +31,22 @@ def cgsense(
 
     Parameters
     ----------
-    ksp_data : torch.Tensor, shape (nC, nN)
-        Raw k-space data to be reconstructed, where nC is the number of channels,
-        nN is the number of spatial points, and ... represents additional dimensions.
-    ktraj : torch.Tensor, shape (nD, nN)
-        Trajectory of the k-space sampling, where nD is the number of dimensions
-        nN is the number of spatial point, and ... represents additional dimensions.
-        Trajectory of the k-space sampling.
-    coil_sensitivities : torch.Tensor, shape (nC, nX, nY, nZ)
-        Coil sensitivity maps used for sensitivity encoding (SENSE), where nC is the
-        number of channels and nX, nY, nZ are the spatial dimensions.
+    ksp : torch.Tensor, shape (C, N, S, ...)
+        Raw k-space data to be reconstructed, where C is the number of channels,
+        N is the number of samples, S is the number of slices/slabs
+        and ... represents additional dimensions.
+    ktraj : torch.Tensor, shape (D, N, S, ...)
+        Trajectory of the k-space sampling, where D is the number of dimensions
+        N is the number of samples, S is the number of slices/slabs
+        and ... represents additional dimensions.
+    coilsens : torch.Tensor, shape (C, X, Y, Z, S)
+        Coil sensitivity maps used for sensitivity encoding (SENSE), where C is the
+        number of channels, X, Y and Z are the spatial dimensions
+        and S is the number of slices/slabs.
     maxiter : int, optional
         Maximum number of iterations for the conjugate gradient solver (default is 20).
+    l2_reg: flaot, optional
+        L2 regularization parameter (default is 0, no regularization).
     channel_normalize : bool, optional
         Whether to normalize the channel sensitivities (default is True).
     verbose : bool, optional
@@ -51,33 +57,25 @@ def cgsense(
     callback : callable, optional
         Callback function for monitoring convergence
         during optimization (default is None).
-
-
-    NOTE: This function is under development and may not be fully functional yet.
     """
-    num_dim, _ = ktraj.shape[:2]
-    num_cha, num_x, num_y, num_z = coil_sensitivities.shape[:4]
+    num_dim, num_col, num_slc, *add_axes = ktraj.shape
+    num_cha, num_x, num_y, num_z, num_slc = coilsens.shape
 
-    modes = [dim for dim in [num_x, num_y, num_z] if dim > 1]
+    if num_dim == 2:
+        modes = (num_x, num_y)
+    elif num_dim == 3:
+        modes = (num_x, num_y, num_z)
+    else:
+        raise ValueError("ktraj must be 2D or 3D.")
 
-    # Check channel dimensions
-    if num_cha != ksp_data.shape[0]:
-        raise ValueError(
-            f"Number of channels in ksp_data ({ksp_data.shape[0]}) does not match "
-            f"number of channels in coil_sensitivities ({num_cha})."
-        )
-
-    # Check spatial dimensions
-    if (3 - len(modes)) > num_dim:
-        raise ValueError(
-            f"Number of dimensions in ktraj ({num_dim}) is less than the number of "
-            f"spatial dimensions in coil_sensitivities ({3 - len(modes)})."
-        )
+    # Collaps additional dimensions
+    ksp = ksp.reshape(num_cha, num_col, num_slc, -1)
+    ktraj = ktraj.reshape(num_dim, num_col, num_slc, -1)
 
     regridded_data = nonuniform_fourier_transform_adjoint(
         k=ktraj,
-        x=ksp_data,
-        n_modes=tuple(modes),
+        x=ksp,
+        n_modes=modes,
     )
 
     transfer_function = nonuniform_transfer_function(
@@ -85,15 +83,19 @@ def cgsense(
         data_shape=(1, *regridded_data.shape[1:]),
     )
 
-    regridded_data = torch.sum(torch.conj(coil_sensitivities) * regridded_data, dim=0)
+    regridded_data = torch.sum(
+        torch.conj(coilsens)[..., None] * regridded_data, dim=0, keepdim=True
+    )
 
     # Create SENSE solver instance
     sense_solver = SENSE(
-        coil_sensitivities=coil_sensitivities,
+        coil_sensitivities=coilsens,
         regridded_data=regridded_data,
         transfer_function=transfer_function,
         channel_normalize=channel_normalize,
         maxiter=maxiter,
+        axes=((1, 2) if num_dim == 2 else (1, 2, 3)),
+        l2_reg=l2_reg,
         verbose=verbose,
         callback=callback,
         device=device,
@@ -101,7 +103,7 @@ def cgsense(
 
     # Solve the SENSE reconstruction problem
     img = sense_solver.solve()
-    img = img.view(torch.complex64).reshape(1, num_x, num_y, num_z)
+    img = img.view(torch.complex64).reshape(1, num_x, num_y, num_z, num_slc, *add_axes)
 
     return img
 
@@ -176,10 +178,11 @@ class SENSE:
         coil_sensitivities: torch.Tensor,
         regridded_data: torch.Tensor,
         transfer_function: torch.Tensor,
-        channel_normalize: bool = True,
+        axes: Union[tuple[int, int], tuple[int, int, int]] = (1, 2),
         maxiter: int = 15,
-        axes: Tuple[int] = (1, 2),
+        l2_reg: float = 0.0,
         verbose: bool = False,
+        channel_normalize: bool = True,
         callback: Optional[Callable] = None,
         device: Optional[torch.device] = None,
     ):
@@ -188,12 +191,17 @@ class SENSE:
 
         Parameters
         ----------
-        coil_sensitivities : torch.Tensor
+        coil_sensitivities : torch.Tensor, shape (C, X, Y, Z, S)
             Coil sensitivity maps used for sensitivity encoding (SENSE).
-        regridded_data : torch.Tensor
-            Regridded k-space data after Fourier and inverse Fourier
-            transformations.
-        transfer_function : torch.Tensor
+        regridded_data : torch.Tensor, shape (1, X, Y, Z, S, M)
+            Regridded k-space data after adjoint (non-uniform) fourier transform
+            and coil combination.
+            Dimensions are (1, X, Y, Z, S, M),
+            where 1 is the number of (combined) channels,
+            X, Y, Z are the spatial dimensions,
+            S is the number of slices/slabs,
+            and M represents additional batch dimensions.
+        transfer_function : torch.Tensor, shape (1, X, Y, Z, S, M)
             Transfer function used in the frequency domain, representing the
             encoding operator for the system.
         maxiter : int, optional
@@ -214,21 +222,25 @@ class SENSE:
 
         channel_operator = ChannelOperator(
             coil_sensitivities,
-            (num_channels,) + regridded_data.shape,
+            (num_channels,) + regridded_data.shape[1:],
             normalize=channel_normalize,
             device=device,
         )
 
         transfer_function_operator = TransferFunctionOperator(
             transfer_function,
-            (num_channels,) + regridded_data.shape,
+            (num_channels,) + regridded_data.shape[1:],
             axes=axes,
             device=device,
         )
 
+        AhA = channel_operator.H @ transfer_function_operator @ channel_operator
+
+        Ident = IdentityOperator(input_shape=regridded_data.shape[1:], device=device)
+
         self.solver = LinearSolver(
             regridded_data,
-            channel_operator.H @ transfer_function_operator @ channel_operator,
+            AhA + l2_reg * Ident,
             maxiter=maxiter,
             verbose=verbose,
         )
