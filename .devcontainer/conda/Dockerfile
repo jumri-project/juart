@@ -12,6 +12,7 @@ RUN apt-get update \
         ssh \
         libfftw3-dev \
         pkg-config \
+        git-lfs \
     && apt-get autoremove -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
