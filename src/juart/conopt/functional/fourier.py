@@ -1,16 +1,16 @@
 import math
 import warnings
 from functools import partial
-from typing import Optional, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 
-import finufft
 import torch
 from pytorch_finufft.functional import finufft_type1, finufft_type2
 
 
 def fourier_transform_forward(
     x: torch.Tensor,
-    axes: Tuple[int, ...],
+    axes: tuple[int, ...],
+    norm: Literal["backward", "ortho", "forward"] = "ortho",
 ) -> torch.Tensor:
     """
     Compute the fast Fourier transform of an array using torch.fft on the GPU/CPU.
@@ -28,14 +28,15 @@ def fourier_transform_forward(
         FFT of the input tensor.
     """
     x = torch.fft.ifftshift(x, dim=axes)
-    x = torch.fft.fftn(x, dim=axes, norm="ortho")
+    x = torch.fft.fftn(x, dim=axes, norm=norm)
     x = torch.fft.fftshift(x, dim=axes)
     return x
 
 
 def fourier_transform_adjoint(
     x: torch.Tensor,
-    axes: Tuple[int, ...],
+    axes: tuple[int, ...],
+    norm: Literal["backward", "ortho", "forward"] = "ortho",
 ) -> torch.Tensor:
     """
     Compute the inverse fast Fourier transform of an array using torch.fft on the
@@ -54,86 +55,9 @@ def fourier_transform_adjoint(
         IFFT of the input tensor.
     """
     x = torch.fft.ifftshift(x, dim=axes)
-    x = torch.fft.ifftn(x, dim=axes, norm="ortho")
+    x = torch.fft.ifftn(x, dim=axes, norm=norm)
     x = torch.fft.fftshift(x, dim=axes)
     return x
-
-
-def nufft2d_type1(
-    k: torch.Tensor,
-    x: torch.Tensor,
-    n_modes: Tuple[int, ...] = None,
-    eps: float = 1e-6,
-    nthreads: int = 1,
-) -> torch.Tensor:
-    """
-    Compute the NUFFT (type 1) converting non-uniform samples to a uniform grid.
-
-    Parameters
-    ----------
-    k : torch.Tensor
-        Non-uniform sampling points of shape (2, num_samples).
-    x : torch.Tensor
-        Input tensor of shape (num_samples, ...).
-    n_modes : tuple of ints, optional
-        Output grid size.
-    eps : float, optional
-        Accuracy threshold for the NUFFT (default: 1e-6).
-    nthreads : int, optional
-        Number of threads to use (default: 1).
-
-    Returns
-    -------
-    torch.Tensor
-        Fourier transformed data on a uniform grid.
-    """
-    y = finufft.nufft2d1(
-        k[0, :].cpu().numpy(),
-        k[1, :].cpu().numpy(),
-        x.cpu().numpy(),
-        n_modes=n_modes,
-        eps=eps,
-        nthreads=nthreads,
-    )
-    return torch.tensor(y, dtype=x.dtype, device=x.device)
-
-
-def nufft2d_type2(
-    k: torch.Tensor,
-    x: torch.Tensor,
-    n_modes: Tuple[int, ...] = None,
-    eps: float = 1e-6,
-    nthreads: int = 1,
-) -> torch.Tensor:
-    """
-    Compute the NUFFT (type 2) converting uniform grid data to non-uniform points.
-
-    Parameters
-    ----------
-    k : torch.Tensor
-        Non-uniform sampling points of shape (2, num_samples).
-    x : torch.Tensor
-        Fourier domain data on a uniform grid.
-    n_modes : tuple of ints, optional
-        Size of the input grid.
-    eps : float, optional
-        Accuracy threshold for the NUFFT (default: 1e-6).
-    nthreads : int, optional
-        Number of threads to use (default: 1).
-
-    Returns
-    -------
-    torch.Tensor
-        The inverse NUFFT result at non-uniform points.
-    """
-    y = finufft.nufft2d2(
-        k[0, :].cpu().numpy(),
-        k[1, :].cpu().numpy(),
-        x.cpu().numpy(),
-        eps=eps,
-        nthreads=nthreads,
-    )
-    return torch.tensor(y, dtype=x.dtype, device=x.device)
 
 
 def nonuniform_fourier_transform_forward(
