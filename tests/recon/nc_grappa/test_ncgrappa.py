@@ -4,7 +4,7 @@ from typing import Optional
 import pytest
 import torch
 
-from juart.recon import ncgrappa_2
+from juart.recon import ncgrappa
 
 torch.manual_seed(2)  # Set a fixed seed for reproducibility
 
@@ -143,19 +143,19 @@ class KtrajTestPatches:
 
     def get_patch_instances(
         self,
-    ) -> list[ncgrappa_2.FilledPatch | ncgrappa_2.EmptyPatch]:
+    ) -> list[ncgrappa.FilledPatch | ncgrappa.EmptyPatch]:
         """Get the patch instances for all patches."""
         patch_instances = []
         for locs, indices in zip(self.patch_locs, self.patch_indices):
             if locs.shape[1] == 1:  # Empty patch
-                patch = ncgrappa_2.EmptyPatch(
+                patch = ncgrappa.EmptyPatch(
                     self.flat_patch_locs[: (self.num_dim + 1), :],  # not use markings
                     center_ind=indices[0],
                     device=self.device,
                 )
                 patch_instances.append(patch)
             else:
-                patch = ncgrappa_2.FilledPatch(
+                patch = ncgrappa.FilledPatch(
                     self.flat_patch_locs[: (self.num_dim + 1), :],  # not use markings
                     center_ind=indices[0],
                     neighbor_inds=indices[1:],
@@ -311,7 +311,7 @@ def multiple_patch_locs(
     ],
 )  # fmt : on
 def test_distance_sort(d, expected):
-    assert torch.equal(ncgrappa_2.distance_sort(d), expected)
+    assert torch.equal(ncgrappa._distance_sort(d), expected)
 
 
 # fmt : off
@@ -336,7 +336,7 @@ def test_distance_sort(d, expected):
 def test_sift_mask_compact(k, idx):
     exp = torch.zeros(k.shape[1], dtype=torch.bool)
     exp[idx] = True
-    assert torch.equal(ncgrappa_2.sift_mask(k), exp)
+    assert torch.equal(ncgrappa._sift_mask(k), exp)
 
 
 @pytest.mark.parametrize(
@@ -388,7 +388,7 @@ def test_FilledPatch_init(k, k_neigh_expect, sift_mask_expect, do_sift):
 
     k_shift_exp = k_neigh_expect - ktraj[:-1, center_ind]
 
-    patch = ncgrappa_2.FilledPatch(
+    patch = ncgrappa.FilledPatch(
         ktraj=ktraj,
         center_ind=center_ind,
         neighbor_inds=neighbor_inds,
@@ -435,7 +435,7 @@ def test_EmptyPatch_init():
 
     center_ind_exp = torch.where(ktraj[-1] == 0)[0]
 
-    patch = ncgrappa_2.EmptyPatch(
+    patch = ncgrappa.EmptyPatch(
         ktraj=ktraj,
         center_ind=center_ind_exp,
     )
@@ -461,7 +461,7 @@ def test_EmptyPatch_from_indices():
 
     center_ind_exp = torch.where(ktraj[-1] == 0)[0]
 
-    patch = ncgrappa_2.EmptyPatch.from_indices(
+    patch = ncgrappa.EmptyPatch.from_indices(
         ktraj=ktraj,
         patch_indices=[center_ind_exp],
     )
@@ -484,7 +484,7 @@ def test_EmptyPatch_init_notempty():
     patch_indices = torch.where(ktraj[-1] != 2)[0]
 
     with pytest.raises(ValueError):
-        ncgrappa_2.EmptyPatch.from_indices(
+        ncgrappa.EmptyPatch.from_indices(
             ktraj=ktraj,
             patch_indices=[patch_indices],
         )
@@ -513,7 +513,7 @@ def test_get_patch_indices():
     ktraj = torch.cat((ktraj, patch_ind), dim=0)
     ktraj_flat = ktraj.reshape(ktraj.shape[0], -1)
 
-    patch_inds = ncgrappa_2._get_patch_indices(
+    patch_inds = ncgrappa._get_patch_indices(
         ktraj=ktraj_flat[:-1, :],
         kernel_size=torch.tensor(
             [
@@ -565,7 +565,7 @@ def test_get_patch_indices_emtpy():
 
     ktraj_flat = torch.concat(patch_loc_list, dim=1)
 
-    patch_inds = ncgrappa_2._get_patch_indices(
+    patch_inds = ncgrappa._get_patch_indices(
         ktraj=ktraj_flat[:-1, :],
         kernel_size=torch.tensor(
             [
@@ -616,7 +616,7 @@ def test_group_patches_init():
 
     patch_instances = testpatches.get_patch_instances()
 
-    grouped_patches = ncgrappa_2.PatchGroup.create_patchgroups(patch_instances)
+    grouped_patches = ncgrappa.PatchGroup.create_patchgroups(patch_instances)
 
     # As the patches are created randomly, there are possibly no
     # patches with the same shift pattern.
@@ -661,7 +661,7 @@ def test_NonCartGrappa_init():
     )
 
     ktraj = patch_locs[: num_dim + 1, :]
-    ncgrappa = ncgrappa_2.NonCartesianGrappa(
+    ncg = ncgrappa.NonCartesianGrappa(
         ktraj=ktraj,
         calib_signal=acs,
         kernel_size=torch.tensor([7, 7]),
@@ -669,19 +669,19 @@ def test_NonCartGrappa_init():
         tik=0,
     )
 
-    assert ncgrappa.ktraj.data_ptr() == ktraj.data_ptr()
-    assert ncgrappa.calib_signal.data_ptr() == acs.data_ptr()
-    assert ncgrappa.kernel_size.shape == (2,)
-    assert ncgrappa.do_sift is True
-    assert ncgrappa.tik == 0
-    assert len(ncgrappa.patch_groups) == num_filled_patches + 1  # +1 for empty patch
-    assert ncgrappa.coilpair_indices.shape == (2, num_cha * (num_cha + 1) // 2)
+    assert ncg.ktraj.data_ptr() == ktraj.data_ptr()
+    assert ncg.calib_signal.data_ptr() == acs.data_ptr()
+    assert ncg.kernel_size.shape == (2,)
+    assert ncg.do_sift is True
+    assert ncg.tik == 0
+    assert len(ncg.patch_groups) == num_filled_patches + 1  # +1 for empty patch
+    assert ncg.coilpair_indices.shape == (2, num_cha * (num_cha + 1) // 2)
 
-    exp_resize_factor = acs_size - 1 / ncgrappa.pad_out - 1
+    exp_resize_factor = (acs_size - 1) / (ncg.pad_out - 1)
     exp_resize_factor_ten = torch.tensor(
         [exp_resize_factor, exp_resize_factor], device=ktraj.device, dtype=torch.float32
     )
-    assert torch.allclose(ncgrappa.pad_resize_factor, exp_resize_factor_ten)
+    assert torch.allclose(ncg.pad_resize_factor, exp_resize_factor_ten)
 
 
 def show_locs():
@@ -728,233 +728,3 @@ if __name__ == "__main__":
         show_locs()
     else:
         pytest.main([__file__])
-
-
-# def _get_ktraj_patches_2D(
-#     img_size: tuple[int, int],
-#     kernel_size: tuple[int, int],
-#     num_patches: int,
-# ) -> torch.Tensor:
-#     """Create a k-space trajectory from patches in 2D."""
-#     # Create unsampled locations
-#     x = np.linspace(-img_size[0]/2, img_size[0]/2, num_patches//2)
-#     y = np.linspace(-img_size[1]/2, img_size[1]/2, num_patches - x.shape[0])
-#     xx, yy = np.meshgrid(x, y, indexing='ij')
-#     grid_locations = np.stack([xx.ravel(), yy.ravel()], axis=0)
-
-#     neighbor_locations = []
-#     for loc in grid_locations.T:
-#         num_neighbors = np.random.randint(0, 5)  # Random number of neighbors
-#         neighbor_distances = np.random.uniform(
-#             -kernel_size[0] // 2,
-#             kernel_size[0] // 2,
-#             size=(2, num_neighbors)
-#         )
-#         neighbor_locations.append(loc[:, None] + neighbor_distances)
-#     neighbor_locations = np.concatenate(neighbor_locations, axis=1)
-
-#     grid_locations = torch.from_numpy(grid_locations)
-#     grid_locations = torch.concatenate(
-#         (
-#             grid_locations,
-#             torch.zeros((1, grid_locations.shape[1]), dtype=torch.float32),
-#         ),
-#         dim=0,
-#     )
-
-#     neighbor_locations = torch.from_numpy(neighbor_locations)
-#     neighbor_locations = torch.concatenate(
-#         (
-#             neighbor_locations,
-#             torch.ones(
-#                 (1, neighbor_locations.shape[1]),
-#                 dtype=torch.float32,
-#             ),
-#         ),
-#         dim=0,
-#     )
-
-#     # Concatenate only torch tensors
-#     ktraj = torch.cat((grid_locations, neighbor_locations), dim=1)
-
-#     # Shuffle the k-space trajectory
-#     ktraj = ktraj[:, torch.randperm(ktraj.shape[1])]
-
-#     return ktraj
-
-
-# def _get_rand_ktraj(n_samples=5000, n_dims=2, unsampled_ratio=0.3):
-#     """Generate a random k-space trajectory with
-#     some unsampled points and included sample dim (n_dims+1)."""
-#     ktraj = torch.rand(n_dims, n_samples, dtype=torch.float32) - 0.5
-#     sample_mask = torch.ones(n_samples, dtype=torch.float32)
-#     unsampled_ind = torch.randperm(n_samples)[: int(n_samples * unsampled_ratio)]
-#     sample_mask[unsampled_ind] = 0
-
-#     ktraj = torch.cat((ktraj, sample_mask[None, :]), dim=0)
-#     return ktraj
-
-
-# def _shepp_logan_img_2D(fov=(0.2, 0.2), matrix=(96, 96)):
-#     """Generate a Shepp-Logan phantom image in 2D with shape (8, 96, 96, 1)."""
-#     sl = SheppLogan(fov=fov, matrix=matrix)
-#     sl.add_coil()
-#     img = sl.get_object()
-#     img = img[..., 0]
-#     return img
-
-# def _shepp_logan_img_3D(fov=(0.2, 0.2, 0.2), matrix=(96, 96, 96)):
-#     """Generate a Shepp-Logan phantom image in 2D with shape (8, 96, 96, 96)."""
-#     sl = SheppLogan(fov=fov, matrix=matrix)
-#     sl.add_coil()
-#     img = sl.get_object()
-#     img = img[..., 0]
-#     return img
-
-# def _shepp_logan_calib_2D(fov=(0.2, 0.2), img_size=(96, 96), calib_size=(96, 20)):
-#     # Create a Shepp-Logan phantom
-#     sl_phantom = SheppLogan(fov=fov, matrix=img_size)
-#     sl_phantom.add_coil()
-#     img = sl_phantom.get_object()
-#     img = img[..., 0, 0]  # Get first echo and partition
-
-#     kcalib = torch.fft.ifftshift(torch.fft.fft2(img, dim=(-1, -2, -3)))
-#     start = img_size[1] // 2 - calib_size[1] // 2
-#     end = -(img_size[1] // 2 - calib_size[1] // 2)
-#     kcalib = kcalib[:, :, start:end]
-
-#     return kcalib
-
-# def test_ncgrappa_init_with_ints():
-#     img_size = 96
-#     kernel_size = 6
-#     ktraj = _get_rand_ktraj(n_samples=100, n_dims=2)
-#     calib_signal = _shepp_logan_img_2D(matrix=(img_size, 20))[..., 0]
-#     ncg = NonCartGrappa(ktraj, calib_signal, img_size, kernel_size)
-#     assert torch.equal(
-#         ncg.kernel_size, torch.tensor([kernel_size, kernel_size], dtype=torch.int32)
-#     )
-#     assert torch.equal(
-#         ncg.img_size, torch.tensor([img_size, img_size], dtype=torch.int32)
-#     )
-#     assert ncg.num_dims == 2
-
-
-# def test_ncgrappa_init_with_tuple():
-#     img_size = (96, 96)
-#     kernel_size = (6, 6)
-#     ktraj = _get_rand_ktraj(n_samples=50, n_dims=2)
-#     calib_signal = _shepp_logan_img_2D(matrix=(96, 20))[..., 0]
-#     ncg = NonCartGrappa(ktraj, calib_signal, img_size, kernel_size)
-#     assert torch.equal(ncg.kernel_size, torch.tensor(kernel_size, dtype=torch.int32))
-#     assert torch.equal(ncg.img_size, torch.tensor(img_size, dtype=torch.int32))
-#     assert ncg.num_dims == 2
-
-
-# def test_ncgrappa_init_with_list():
-#     img_size = [96, 96]
-#     kernel_size = [7, 7]
-#     ktraj = _get_rand_ktraj(n_samples=30, n_dims=2)
-#     calib_signal = _shepp_logan_img_2D(matrix=(96, 20))[..., 0]
-#     ncg = NonCartGrappa(ktraj, calib_signal, img_size, kernel_size)
-#     assert torch.equal(ncg.kernel_size, torch.tensor(kernel_size, dtype=torch.int32))
-#     assert torch.equal(ncg.img_size, torch.tensor(img_size, dtype=torch.int32))
-#     assert ncg.num_dims == 2
-
-
-# def test_ncgrappa_init_wrong_kernel_size_length():
-#     img_size = (96, 96)
-#     kernel_size = (8, 8, 8)
-#     ktraj = _get_rand_ktraj(n_samples=20, n_dims=2)
-#     calib_signal = _shepp_logan_img_3D(matrix=(96, 20, 20))[..., 0]
-#     with pytest.raises(AssertionError):
-#         NonCartGrappa(ktraj, calib_signal, img_size, kernel_size)
-
-
-# def test_ncgrappa_init_wrong_img_size_length():
-#     img_size = (96, 96, 96)
-#     kernel_size = (6, 6)
-#     ktraj = _get_rand_ktraj(n_samples=20, n_dims=2)
-#     calib_signal = _shepp_logan_img_3D(matrix=(96, 20, 20))[..., 0]
-#     with pytest.raises(AssertionError):
-#         NonCartGrappa(ktraj, calib_signal, img_size, kernel_size)
-
-
-# def test_ncgrappa_init_with_device():
-#     img_size = 96
-#     kernel_size = 6
-#     ktraj = _get_rand_ktraj(n_samples=10, n_dims=2).to("cpu")
-#     calib_signal = _shepp_logan_img_3D(matrix=(96, 20, 20))[..., 0].to("cpu")
-#     ncg = NonCartGrappa(
-#         ktraj, calib_signal, img_size, kernel_size, device=torch.device("cpu")
-#     )
-#     assert ncg.kernel_size.device.type == "cpu"
-#     assert ncg.img_size.device.type == "cpu"
-
-
-# def test_ncgrappa_seperated_ktraj():
-#     img_size = (96, 96)
-#     kernel_size = (6, 6)
-#     ktraj = _get_ktraj_patches_2D(
-#         img_size=img_size, kernel_size=kernel_size, num_patches=60
-#     )
-#     calib_signal = _shepp_logan_calib_2D(
-#         fov=(0.2, 0.2), img_size=img_size, calib_size=(96, 20)
-#     )
-#     ncg = NonCartGrappa(ktraj, calib_signal, img_size, kernel_size)
-
-#     out_ktraj_sampled = ncg.ktraj_sampled
-#     out_ktraj_unsampled = ncg.ktraj_unsampled
-
-#     exp_ktraj_sampled = ktraj[:-1, ktraj[-1, :].bool()]
-#     exp_ktraj_unsampled = ktraj[:-1, ~ktraj[-1, :].bool()]
-
-#     assert torch.equal(out_ktraj_sampled, exp_ktraj_sampled)
-#     assert torch.equal(out_ktraj_unsampled, exp_ktraj_unsampled)
-
-
-# def test_ncgrappa_constellations():
-#     img_size = (96, 96)
-#     kernel_size = (6, 6)
-
-#     ktraj = _get_ktraj_patches_2D(img_size, kernel_size, 60)
-
-#     calib_signal = _shepp_logan_calib_2D(
-#         fov=(0.2, 0.2), img_size=img_size, calib_size=(96, 20)
-#     )
-
-#     ncg = NonCartGrappa(ktraj, calib_signal, img_size, kernel_size)
-
-#     assert len(ncg.patches) == ncg.ktraj_unsampled.shape[1]
-
-
-# def visual_inspection():
-#     """Visual inspection of the NonCartGrappa class."""
-
-#     import matplotlib.pyplot as plt
-
-#     ktraj = _get_rand_ktraj(n_samples=100, n_dims=2)
-#     calib_signal = _shepp_logan_img_2D(matrix=(96, 20))[..., 0]
-#     ncg = NonCartGrappa(ktraj, calib_signal, img_size=96, kernel_size=6)
-
-#     sample_mask = ktraj[-1, :].bool()
-#     ktraj_samples = ktraj[:2, sample_mask]
-#     ktraj_unsampled = ktraj[:2, ~sample_mask]
-
-#     plt.figure()
-#     plt.plot(ktraj_samples[0], ktraj_samples[1], "ro", label="Sampled")
-#     plt.plot(ktraj_unsampled[0], ktraj_unsampled[1], "bo", label="Unsampled")
-#     plt.xlabel("k_x")
-#     plt.ylabel("k_y")
-#     plt.legend()
-#     plt.show()
-
-#     print(ncg.inds_c)
-
-
-# if __name__ == "__main__":
-#     if len(sys.argv) > 1 and sys.argv[1] == "visual":
-#         visual_inspection()
-#     else:
-#         pytest.main([__file__])
-#         pytest.main([__file__])
