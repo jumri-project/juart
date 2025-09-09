@@ -1,12 +1,12 @@
 import warnings
 from collections.abc import Sequence
-from typing import Optional, Union
+from typing import Optional
 
 import torch
 
 from ..conopt.linops.identity import IdentityOperator
 from ..conopt.linops.tf import TransferFunctionOperator
-from ..conopt.proxops.linear import conjugate_gradient
+from ..conopt.proxalgs.cg import LinearSolver
 from ..conopt.tfs.fourier import (
     nonuniform_fourier_transform_adjoint,
     nonuniform_transfer_function,
@@ -16,7 +16,7 @@ from ..conopt.tfs.fourier import (
 def cgnufft(
     ksp: torch.Tensor,
     ktraj: torch.Tensor,
-    img_size: Union[Sequence[int], int],
+    img_size: Sequence[int],
     maxiter: int = 10,
     l2_reg: float = 0.0,
     device: Optional[torch.device] = None,
@@ -48,17 +48,10 @@ def cgnufft(
     NOTE: This function is under development and may not be fully functional yet.
     """
 
-    if device is None:
-        device = ksp.device
+    device = torch.device(device) if device is not None else ktraj.device
 
     if ksp.shape[1] != ktraj.shape[1]:
         raise ValueError("The number of samples in k-space and trajectory must match.")
-
-    if ksp.ndim != 2 or ktraj.ndim != 2:
-        raise ValueError(
-            "k-space and trajectory must be 2D tensors."
-            "Higher dimensional data is not supported yet."
-        )
 
     ktraj_min, ktraj_max = ktraj.min(), ktraj.max()
     if ktraj_min < -1 or ktraj_max > 1:
@@ -69,40 +62,21 @@ def cgnufft(
             stacklevel=2,
         )
 
-    num_cha, num_col = ksp.shape
+    num_cha, num_col, *add_axes = ksp.shape
     num_dim = ktraj.shape[0]
 
     if num_dim not in (2, 3):
-        raise ValueError(
-            f"Only 2D and 3D trajectories are supported. Received {num_dim} dimensions."
-        )
+        raise ValueError(f"Trajectory must be 2D or 3D, got {num_dim}D.")
 
-    # Get correct image size
-    if isinstance(img_size, int):
-        if num_dim == 2:
-            img_size = (img_size, img_size, 1)
-        else:
-            img_size = (img_size, img_size, img_size)
-
-    elif isinstance(img_size, Sequence):
-        if len([d for d in img_size if d > 1]) != num_dim:
-            raise ValueError(
-                "Number of nonsingleton dimensions in image size "
-                "must match the number of dimensions in the trajectory. "
-                f"Expected {num_dim} dimensions, got {len(img_size)}."
-            )
-        if num_dim == 2:
-            if len(img_size) == 2:
-                img_size = (*img_size, 1)
-            elif len(img_size) == 1:
-                img_size = (img_size[0], img_size[0], 1)
-        else:
-            img_size = tuple(img_size)
+    if num_dim == 2:
+        n_modes = (img_size[0], img_size[1])
+    else:
+        n_modes = (img_size[0], img_size[1], img_size[2])
 
     regridded_data = nonuniform_fourier_transform_adjoint(
         k=ktraj,
         x=ksp,
-        n_modes=tuple([d for d in img_size if d > 1]),
+        n_modes=n_modes,
     )
 
     transfer_function = nonuniform_transfer_function(
@@ -110,24 +84,25 @@ def cgnufft(
     )
 
     transfer_function_operator = TransferFunctionOperator(
-        transfer_function, regridded_data.shape, device=device
+        transfer_function,
+        regridded_data.shape,
+        axes=((1, 2) if num_dim == 2 else (1, 2, 3)),
+        device=device,
     )
 
     Ident = IdentityOperator(regridded_data.shape, device=device)
 
     A = transfer_function_operator + l2_reg * Ident
 
-    b = regridded_data.view(torch.float32).ravel()
+    b = regridded_data.contiguous().view(torch.float32).ravel()
 
-    img, residual = conjugate_gradient(
-        A,
-        b,
-        x=torch.zeros_like(b),
-        residual=[],
+    solver = LinearSolver(
+        AHd=b,
+        AHA=A,
         maxiter=maxiter,
-        progressbar=verbose > 0,
+        verbose=verbose > 0,
     )
 
-    img = img.view(torch.complex64).reshape(num_cha, *img_size)
+    img = solver.solve().view(torch.complex64).reshape(num_cha, *img_size, *add_axes)
 
     return img
