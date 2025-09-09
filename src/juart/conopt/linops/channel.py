@@ -24,19 +24,16 @@ class ChannelOperator(LinearOperator):
         Parameters:
         ----------
         coil_sensitivities : torch.Tensor
-            Coil sensitivity maps (nC, nX, nY, nZ).
+            Coil sensitivity maps (C, X, Y, Z, S).
         data_shape : tuple of int
-            Shape of the data (nX, nY, nZ, nS, nTI, nTE).
+            Shape of the data (C, X, Y, Z, S, M).
         normalize : bool, optional
             Whether to normalize to unit spectral norm (default is True).
         device : str, optional
             Device on which the operator will run ('cpu' or 'cuda').
         """
         # Unpack the data shape
-        _, nX, nY, nZ, *add_axes = data_shape
-
-        # Number of channels (coils)
-        nC = coil_sensitivities.shape[0]
+        nC, nX, nY, nZ, nS, nM = data_shape
 
         # Device and dtype
         self.device = device
@@ -55,19 +52,15 @@ class ChannelOperator(LinearOperator):
         coil_sensitivities = coil_sensitivities.to(device)
 
         # Store coil sensitivities, ensuring correct dimensions and device
-        self.coil_sensitivities = torch.broadcast_to(
-            coil_sensitivities,
-            (*coil_sensitivities.shape[:4], *add_axes),
-        )
+        self.coil_sensitivities = coil_sensitivities[..., None]
 
         # Normalize to unit spectral norm if required
         if normalize:
-            self.coil_sensitivities = (
-                self.coil_sensitivities
-                / torch.sqrt(
-                    torch.sum(torch.abs(self.coil_sensitivities) ** 2, dim=0)
-                ).max()
-            )
+            norm = torch.sqrt(
+                torch.sum(torch.abs(self.coil_sensitivities) ** 2, dim=0)
+            ).max()
+
+            self.coil_sensitivities = self.coil_sensitivities / norm
 
     def _matvec(
         self,
