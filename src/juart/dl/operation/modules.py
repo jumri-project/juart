@@ -1,5 +1,4 @@
 import torch
-from typing import Tuple
 
 from ..utils.dist import gather_and_average_losses
 
@@ -23,7 +22,7 @@ def training(
             # Prepare data
             data = dataset[index]
 
-            print(f"reading data")
+            print("reading data")
             images_regridded = data["images_regridded"].to(device)
             kspace_trajectory = data["kspace_trajectory"].to(device)
             kspace_data = data["kspace_data"].to(device)

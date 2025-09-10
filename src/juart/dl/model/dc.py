@@ -1,8 +1,8 @@
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 from torch import jit
-
-from typing import Tuple
 from tqdm import tqdm
 
 from ..utils.fourier import apply_transfer_function, nonuniform_transfer_function
@@ -18,11 +18,7 @@ def inner_product(
 
 
 def conj_grad(
-    A: nn.Module,
-    b: torch.Tensor,
-    x: torch.Tensor,
-    niter: int,
-    verbose: bool = True
+    A: nn.Module, b: torch.Tensor, x: torch.Tensor, niter: int, verbose: bool = True
 ) -> torch.Tensor:
     r = b - A(x)
     p = r
@@ -82,7 +78,7 @@ class ToeplitzOperator(nn.Module):
     ):
         self.kernel = nonuniform_transfer_function(
             kspace_trajectory,
-            (1, ) + self.shape,
+            (1,) + self.shape,
             weights=kspace_mask,
         )
         self.kernel = self.kernel / 4
@@ -111,7 +107,7 @@ class ToeplitzOperator(nn.Module):
             v = apply_transfer_function(
                 v,
                 self.kernel,
-                axes = self.axes,
+                axes=self.axes,
             )
 
             v = v * torch.conj(sensitivity_maps_set[..., None, None])
@@ -134,21 +130,21 @@ class DataConsistency(nn.Module):
         validation_level=0,
         device=None,
         dtype=torch.complex64,
-        verbose: bool = False
+        verbose: bool = False,
     ):
         super().__init__()
 
         self.toep_ob = ToeplitzOperator(
             shape,
-            axes = axes,
+            axes=axes,
             device=device,
             dtype=dtype,
         )
         self.lam = nn.Parameter(
             torch.tensor(
-                lamda_start, 
-                 dtype=torch.float32, 
-                 device=device,
+                lamda_start,
+                dtype=torch.float32,
+                device=device,
             )
         )
         self.niter = niter
@@ -195,7 +191,7 @@ class DataConsistency(nn.Module):
             self.images_regridded + self.lam * images,
             images,
             self.niter,
-            verbose = self.verbose
+            verbose=self.verbose,
         )
 
         return images

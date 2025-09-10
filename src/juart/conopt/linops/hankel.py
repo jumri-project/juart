@@ -29,15 +29,15 @@ class BlockHankelOperator(LinearOperator):
         Parameters:
         ----------
         input_shape : tuple of int
-            Shape of the input tensor (nX, nY, nZ, nS, nT1, nT2).
+            Shape of the input tensor (..., nT1, nT2).
         normalize : bool, optional
             Whether to normalize the operator (default is False).
         """
-        nX, nY, nZ, nS, nT1, nT2 = input_shape
+        *add_axes, nT1, nT2 = input_shape
         M, N, P, Q = block_hankel_shape((nT1, nT2))
 
-        self.forward_shape = (nX, nY, nZ, nS, nT1, nT2)
-        self.adjoint_shape = (nX, nY, nZ, nS, M * P, N * Q)
+        self.forward_shape = (*add_axes, nT1, nT2)
+        self.adjoint_shape = (*add_axes, M * P, N * Q)
 
         self.shape = (
             2 * torch.prod(torch.tensor(self.adjoint_shape)),
@@ -123,7 +123,7 @@ class BlockHankelNormalOperator(LinearOperator):
         normalize : bool, optional
             Whether to normalize the operator (default is False).
         """
-        nX, nY, nZ, nS, nT1, nT2 = input_shape
+        *add_axes, nT1, nT2 = input_shape
         M, N, P, Q = block_hankel_shape((nT1, nT2))
 
         # Set the data type to float32
@@ -131,8 +131,8 @@ class BlockHankelNormalOperator(LinearOperator):
         self.internal_dtype = torch.complex64
         self.device = device
 
-        self.forward_shape = (nX, nY, nZ, nS, nT1, nT2)
-        self.adjoint_shape = (nX, nY, nZ, nS, nT1, nT2)
+        self.forward_shape = (*add_axes, nT1, nT2)
+        self.adjoint_shape = (*add_axes, nT1, nT2)
 
         self.shape = (
             2 * torch.prod(torch.tensor(self.adjoint_shape)),

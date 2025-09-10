@@ -16,7 +16,7 @@ from ..conopt.proxops.nuclear import SingularValueSoftThresholdingOperator
 from ..conopt.proxops.taxicab import JointSoftThresholdingOperator
 
 
-class MIRAGE(object):
+class REGSENSE(object):
     def __init__(
         self,
         coil_sensitivities: torch.Tensor,
@@ -113,7 +113,7 @@ class MIRAGE(object):
         """
 
         num_channels = coil_sensitivities.shape[0]
-        shape = regridded_data.shape
+        shape = regridded_data.shape[1:]
 
         lin_ops = []
         lin_ops_normal = []
@@ -121,7 +121,7 @@ class MIRAGE(object):
 
         channel_operator = ChannelOperator(
             coil_sensitivities,
-            (num_channels,) + regridded_data.shape,
+            (num_channels,) + shape,
             normalize=channel_normalize,
             device=device,
         )
@@ -135,15 +135,19 @@ class MIRAGE(object):
 
         if lambda_wavelet is not None:
             wavelet_operator = WaveletTransformOperator(
-                shape,
-                axes=(0, 1),
+                (1,) + shape,
+                axes=(1, 2),
                 wavelet=wavelet_type,
                 level=wavelet_level,
                 device=device,
             )
             lin_ops.append(-weight_wavelet * wavelet_operator)
             lin_ops_normal.append(
-                weight_wavelet**2 * IdentityOperator(shape, device=device)
+                weight_wavelet**2
+                * IdentityOperator(
+                    (1,) + shape,
+                    device=device,
+                )
             )
             prox_ops.append(
                 JointSoftThresholdingOperator(
@@ -154,10 +158,17 @@ class MIRAGE(object):
             )
 
         if lambda_hankel is not None:
-            hankel_operator = BlockHankelOperator(shape, device=device)
+            hankel_operator = BlockHankelOperator(
+                (1,) + shape,
+                device=device,
+            )
             lin_ops.append(-weight_hankel * hankel_operator)
             lin_ops_normal.append(
-                weight_hankel**2 * BlockHankelNormalOperator(shape, device=device)
+                weight_hankel**2
+                * BlockHankelNormalOperator(
+                    (1,) + shape,
+                    device=device,
+                )
             )
             prox_ops.append(
                 SingularValueSoftThresholdingOperator(
@@ -167,19 +178,32 @@ class MIRAGE(object):
 
         if lambda_casorati is not None:
             casorati_operator = ShiftOperator(
-                casorati_window, (1, 1), (0, 1), shape, device=device
+                casorati_window,  # Shift_number
+                (1, 1),  # Shift size
+                (1, 2),  # Axes
+                (1,) + shape,
+                device=device,
             )
             lin_ops.append(-weight_casorati * casorati_operator)
             lin_ops_normal.append(
-                weight_casorati**2 * IdentityOperator(shape, device=device)
+                weight_casorati**2
+                * IdentityOperator(
+                    (1,) + shape,
+                    device=device,
+                )
             )
             prox_ops.append(
                 SingularValueSoftThresholdingOperator(
                     casorati_operator.adjoint_shape,
                     weight_casorati * lambda_casorati,
-                    # TODO: needs a fix
-                    # (1, 2, 3, 4, 5, 6, 0),
-                    # (nX, nY, nZ, nS, nTI, -1),
+                    # Move shift dimension to the end
+                    transpose=tuple(
+                        torch.roll(
+                            torch.arange(len(casorati_operator.adjoint_shape)), -1
+                        )
+                    ),
+                    # Flatten echo and shift dimension
+                    reshape=casorati_operator.adjoint_shape[1:-1] + (-1,),
                 )
             )
 

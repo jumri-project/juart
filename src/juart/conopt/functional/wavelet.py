@@ -156,7 +156,7 @@ def wavelet_transfer_functions_nd(
     List[torch.Tensor]
         List of transfer functions for each axis.
     """
-    nL, nX, nY, nZ, nS, nTI, nTE = shape
+    nL, *add_axes = shape
 
     if len(axes) == 2:
         Hx, Hy = H[0], H[1]
@@ -165,13 +165,13 @@ def wavelet_transfer_functions_nd(
         Fx = torch.cat((Gx[:, :, None], Hx[:, :, None], Gx[:, :, None]), dim=2)
         Fx = Fx.reshape(-1, nL - 1)
         Fx = torch.cat((Fx, Hx[:, -1:]), dim=1)
-        Fx = Fx.unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1)
+        Fx = Fx.reshape(Fx.shape[:1] + (len(add_axes) - 1) * (1,) + Fx.shape[1:])
         Fx = torch.movedim(Fx, 0, axes[0])
 
         Fy = torch.cat((Hy[:, :, None], Gy[:, :, None], Gy[:, :, None]), dim=2)
         Fy = Fy.reshape(-1, nL - 1)
         Fy = torch.cat((Fy, Hy[:, -1:]), dim=1)
-        Fy = Fy.unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1)
+        Fy = Fy.reshape(Fy.shape[:1] + (len(add_axes) - 1) * (1,) + Fy.shape[1:])
         Fy = torch.movedim(Fy, 0, axes[1])
 
         F = [Fx.to(device), Fy.to(device)]
@@ -183,19 +183,19 @@ def wavelet_transfer_functions_nd(
         Fx = torch.cat((Gx[:, :, None], Hx[:, :, None], Gx[:, :, None]), dim=2)
         Fx = Fx.reshape(-1, nL - 1)
         Fx = torch.cat((Fx, Hx[:, -1:]), dim=1)
-        Fx = Fx.unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1)
+        Fx = Fx.reshape(Fx.shape[:1] + (len(add_axes) - 1) * (1,) + Fx.shape[1:])
         Fx = torch.movedim(Fx, 0, axes[0])
 
         Fy = torch.cat((Hy[:, :, None], Gy[:, :, None], Gy[:, :, None]), dim=2)
         Fy = Fy.reshape(-1, nL - 1)
         Fy = torch.cat((Fy, Hy[:, -1:]), dim=1)
-        Fy = Fy.unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1)
+        Fy = Fy.reshape(Fy.shape[:1] + (len(add_axes) - 1) * (1,) + Fy.shape[1:])
         Fy = torch.movedim(Fy, 0, axes[1])
 
         Fz = torch.cat((Hz[:, :, None], Gz[:, :, None], Gz[:, :, None]), dim=2)
         Fz = Fz.reshape(-1, nL - 1)
         Fz = torch.cat((Fz, Hz[:, -1:]), dim=1)
-        Fz = Fz.unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1).unsqueeze(1)
+        Fz = Fz.reshape(Fz.shape[:1] + (len(add_axes) - 1) * (1,) + Fz.shape[1:])
         Fz = torch.movedim(Fz, 0, axes[2])
 
         F = [Fx.to(device), Fy.to(device), Fz.to(device)]
@@ -230,12 +230,12 @@ def wavelet_transform_forward(
     """
     if len(axes) == 2:
         x_fft = fourier_transform_forward(input_tensor, axes=axes)
-        y = x_fft.unsqueeze(-1) * F[0] * F[1]
+        y = x_fft[..., None] * F[0] * F[1]
         y = fourier_transform_adjoint(y, axes=axes)
 
     elif len(axes) == 3:
         x_fft = fourier_transform_forward(input_tensor, axes=axes)
-        y = x_fft.unsqueeze(-1) * F[0] * F[1] * F[2]
+        y = x_fft[..., None] * F[0] * F[1] * F[2]
         y = fourier_transform_adjoint(y, axes=axes)
 
     else:
