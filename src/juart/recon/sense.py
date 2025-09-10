@@ -180,7 +180,7 @@ class SENSE:
         transfer_function: torch.Tensor,
         axes: Union[tuple[int, int], tuple[int, int, int]] = (1, 2),
         maxiter: int = 15,
-        l2_reg: float = 0.0,
+        lambda_ridge: float = 0.0,
         verbose: bool = False,
         channel_normalize: bool = True,
         callback: Optional[Callable] = None,
@@ -219,28 +219,32 @@ class SENSE:
         """
 
         num_channels = coil_sensitivities.shape[0]
+        shape = regridded_data.shape[1:]
 
         channel_operator = ChannelOperator(
             coil_sensitivities,
-            (num_channels,) + regridded_data.shape[1:],
+            (num_channels,) + shape,
             normalize=channel_normalize,
             device=device,
         )
 
         transfer_function_operator = TransferFunctionOperator(
             transfer_function,
-            (num_channels,) + regridded_data.shape[1:],
+            (num_channels,) + shape,
             axes=axes,
             device=device,
         )
 
         AhA = channel_operator.H @ transfer_function_operator @ channel_operator
 
-        Ident = IdentityOperator(input_shape=regridded_data.shape[1:], device=device)
+        identity_operator = IdentityOperator(
+            input_shape=shape,
+            device=device,
+        )
 
         self.solver = LinearSolver(
             regridded_data,
-            AhA + l2_reg * Ident,
+            AhA + lambda_ridge * identity_operator,
             maxiter=maxiter,
             verbose=verbose,
         )

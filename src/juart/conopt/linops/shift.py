@@ -33,15 +33,14 @@ class ShiftOperator(LinearOperator):
         input_shape : tuple of int
             Shape of the input tensor (nX, nY, nZ, nS, nTI, nTE).
         """
-        nX, nY, nZ, nS, nTI, nTE = input_shape
-        nW = torch.prod(torch.tensor(shift_number))
+        nW = int(torch.prod(torch.tensor(shift_number)))
 
         self.shift_number = shift_number
         self.shift_size = shift_size
         self.axes = axes
 
-        self.forward_shape = (1, nX, nY, nZ, nS, nTI, nTE)
-        self.adjoint_shape = (nW, nX, nY, nZ, nS, nTI, nTE)
+        self.forward_shape = (1, *input_shape)
+        self.adjoint_shape = (nW, *input_shape)
 
         self.shape = (
             2 * torch.prod(torch.tensor(self.adjoint_shape)),

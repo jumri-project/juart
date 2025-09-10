@@ -40,7 +40,6 @@ class WaveletTransformOperator(LinearOperator):
             Axes along which the wavelet transform is applied (default is (0, 1)).
         """
         # Number of dimensions for wavelet decomposition
-        nX, nY, nZ, nS, nTI, nTE = input_shape
         nD = (3 * level) + 1
 
         # Calculate wavelet transfer functions for the axes
