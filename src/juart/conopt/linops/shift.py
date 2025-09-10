@@ -31,7 +31,7 @@ class ShiftOperator(LinearOperator):
         axes : tuple of int
             The axes along which the shift is applied.
         input_shape : tuple of int
-            Shape of the input tensor (nX, nY, nZ, nS, nTI, nTE).
+            Shape of the input tensor.
         """
         nW = int(torch.prod(torch.tensor(shift_number)))
 

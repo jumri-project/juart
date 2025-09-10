@@ -29,7 +29,7 @@ class BlockHankelOperator(LinearOperator):
         Parameters:
         ----------
         input_shape : tuple of int
-            Shape of the input tensor (nX, nY, nZ, nS, nT1, nT2).
+            Shape of the input tensor (..., nT1, nT2).
         normalize : bool, optional
             Whether to normalize the operator (default is False).
         """

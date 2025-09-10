@@ -26,7 +26,7 @@ class ChannelOperator(LinearOperator):
         coil_sensitivities : torch.Tensor
             Coil sensitivity maps (C, X, Y, Z, S).
         data_shape : tuple of int
-            Shape of the data (C, X, Y, Z, S, M).
+            Shape of the data (C, X, Y, Z, S, ...).
         normalize : bool, optional
             Whether to normalize to unit spectral norm (default is True).
         device : str, optional

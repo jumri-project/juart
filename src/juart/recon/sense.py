@@ -193,24 +193,25 @@ class SENSE:
         ----------
         coil_sensitivities : torch.Tensor, shape (C, X, Y, Z, S)
             Coil sensitivity maps used for sensitivity encoding (SENSE).
-        regridded_data : torch.Tensor, shape (1, X, Y, Z, S, M)
+        regridded_data : torch.Tensor, shape (1, X, Y, Z, S, ...)
             Regridded k-space data after adjoint (non-uniform) fourier transform
             and coil combination.
-            Dimensions are (1, X, Y, Z, S, M),
+            Dimensions are (1, X, Y, Z, S, ...),
             where 1 is the number of (combined) channels,
             X, Y, Z are the spatial dimensions,
             S is the number of slices/slabs,
-            and M represents additional batch dimensions.
-        transfer_function : torch.Tensor, shape (1, X, Y, Z, S, M)
+            and ... represents additional batch dimensions.
+        transfer_function : torch.Tensor, shape (1, X, Y, Z, S, ...)
             Transfer function used in the frequency domain, representing the
             encoding operator for the system.
         maxiter : int, optional
             Number of  iterations for solving the linear system using the
             conjugate gradient method (default is 15).
+        lambda_ridge : float, optional
+            L2 regularization parameter (default is 0, no regularization).
         callback : callable, optional
             Callback function for monitoring convergence during optimization
             (default is None).
-
         Notes
         -----
 
