@@ -11,6 +11,7 @@ from tqdm import tqdm
 from ..utils.validation import timing_layer, validation_layer
 from .dc import DataConsistency
 from .resnet import ResNet
+import torch.profiler
 
 
 class ExponentialMovingAverageModel(AveragedModel):
@@ -73,6 +74,9 @@ class UnrolledNet(nn.Module):
         kernel_size: Tuple[int] = (3,3),
         axes: Tuple[int] = (1,2),
         device=None,
+        ConvLayerCheckpoints: bool = False,
+        ResNetCheckpoints: bool = False,
+        profiler: bool = False,
         dtype=torch.complex64,
     ):
         """
@@ -109,9 +113,12 @@ class UnrolledNet(nn.Module):
         kernel_size: Tuple[int], optional
             changes the size of the kernel used in the convolutional layers
             (default is (3,3))
-        device : torch.device, optional
+        device : str, optional
             Device on which to perform the computation
             (default is None, which uses the current device).
+            It is also possible to give a list of strings. The first
+            item is the DataConsistency device and the second one is
+            the device used for the resnet.
 
         NOTE: This function is under development and may not be fully functional yet.
     """
@@ -121,6 +128,22 @@ class UnrolledNet(nn.Module):
         contrasts = nTI * nTE
         dim = len(axes)
 
+        if type(device) == list:
+            
+            if len(device) > 1:
+                dc_device = device[0]
+                resnet_device = device[1]
+                
+            else:
+                dc_device = device[0]
+                resnet_device = device[0]
+
+        else:
+            dc_device = device
+            resnet_device = device
+
+        
+        
         self.regularizer = ResNet(
             contrasts=contrasts,
             features=features,
@@ -132,7 +155,9 @@ class UnrolledNet(nn.Module):
             timing_level=timing_level - 1,
             validation_level=validation_level - 1,
             dim = dim,
-            device=device,
+            ConvLayerCheckpoints = ConvLayerCheckpoints,
+            ResNetCheckpoints = ResNetCheckpoints,
+            device=dc_device,
             dtype=dtype,
         )
         self.dc = DataConsistency(
@@ -142,7 +167,7 @@ class UnrolledNet(nn.Module):
             timing_level=timing_level - 1,
             validation_level=validation_level - 1,
             axes = axes,
-            device=device,
+            device=resnet_device,
             dtype=dtype,
         )
         self.num_unroll_blocks = num_unroll_blocks
@@ -150,6 +175,7 @@ class UnrolledNet(nn.Module):
         self.disable_progress_bar = disable_progress_bar
         self.timing_level = timing_level
         self.validation_level = validation_level
+        self.profiler = profiler
         self.device = device
 
     @timing_layer
@@ -175,9 +201,44 @@ class UnrolledNet(nn.Module):
 
         images = images_regridded.clone().detach()
 
-        for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
-            images = checkpoint(self.regularizer, images, use_reentrant=False)
-            images = checkpoint(self.dc, images, use_reentrant=False)
+        if self.profiler:
+            for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
+                # --- Profiling für ResNet (regularizer) ---
+                with torch.profiler.profile(
+                    activities=[torch.profiler.ProfilerActivity.CUDA],
+                    schedule=torch.profiler.schedule(wait=0, warmup=0, active=1),
+                    on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/resnet'),
+                    record_shapes=True,
+                    profile_memory=True,
+                    with_stack=True
+                ) as prof_resnet:
+                    images = checkpoint(self.regularizer, images, use_reentrant=False)
+                    prof_resnet.step()
+        
+                # Speicherverbrauch nach ResNet ausgeben
+                print("Memory after ResNet:")
+                print(torch.cuda.memory_summary(device=self.device, abbreviated=False))
+        
+                # --- Profiling für DataConsistency (dc) ---
+                with torch.profiler.profile(
+                    activities=[torch.profiler.ProfilerActivity.CUDA],
+                    schedule=torch.profiler.schedule(wait=0, warmup=0, active=1),
+                    on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/dc'),
+                    record_shapes=True,
+                    profile_memory=True,
+                    with_stack=True
+                ) as prof_dc:
+                    images = checkpoint(self.dc, images, use_reentrant=False)
+                    prof_dc.step()
+        
+                # Speicherverbrauch nach DataConsistency ausgeben
+                print("Memory after DataConsistency:")
+                print(torch.cuda.memory_summary(device=self.device, abbreviated=False))
+
+        else:
+            for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
+                images = checkpoint(self.regularizer, images, use_reentrant=False)
+                images = checkpoint(self.dc, images, use_reentrant=False)
 
         if self.phase_normalization:
             images = images * images_phase[..., None, None]

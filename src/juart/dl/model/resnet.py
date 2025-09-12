@@ -3,6 +3,8 @@ import torch.nn as nn
 from torch.nn.utils.parametrizations import spectral_norm
 from typing import Tuple
 
+from torch.utils.checkpoint import checkpoint
+
 from ..utils.validation import timing_layer, validation_layer
 
 
@@ -95,7 +97,7 @@ class StableConv2D(nn.Conv2d):
         )
 
 
-class ConvLayer(nn.Sequential):
+class ConvLayer(nn.Module):
     def __init__(
         self,
         in_channels,
@@ -108,6 +110,7 @@ class ConvLayer(nn.Sequential):
         spectral_normalization=False,
         activation="ReLU",
         device=None,
+        ConvLayerCheckpoints = False,
         dtype=torch.complex64,
     ):
         """
@@ -154,8 +157,12 @@ class ConvLayer(nn.Sequential):
         NOTE: This function is under development and may not be fully functional yet.
     """
 
+        super().__init__()
+        self.ConvLayerCheckpoints = ConvLayerCheckpoints
+        self.dtype = dtype
+        
         if dim == 2:
-            convlayer = nn.Conv2d(
+            self.convlayer = nn.Conv2d(
                 in_channels,
                 out_channels,
                 kernel_size,
@@ -169,7 +176,7 @@ class ConvLayer(nn.Sequential):
                 conv2d = spectral_norm(conv2d)
 
         elif dim == 3:
-            convlayer = nn.Conv3d(
+            self.convlayer = nn.Conv3d(
                 in_channels,
                 out_channels,
                 kernel_size,
@@ -183,11 +190,32 @@ class ConvLayer(nn.Sequential):
                 conv3d = spectral_norm(conv3d)
 
         if activation == "Identity":
-            function = nn.Identity()
+            self.function = nn.Identity()
         else:
-            function = ComplexActivation(activation)
+            self.function = ComplexActivation(activation)
+            
 
-        super().__init__(convlayer, function)
+    def forward(
+        self,
+        image):
+
+        if self.ConvLayerCheckpoints:
+            image = checkpoint(self.CalcLayer, image, use_reentrant = False)
+
+        else:
+            image = image.to(dtype=self.dtype)
+            image = self.convlayer(image)
+            image = self.function(image)
+
+        return image
+
+    def CalcLayer(self,image):
+
+        image = self.convlayer(image)
+        image = self.function(image)
+
+        return image
+        
 
 
 class ResNetBlock(nn.Sequential):
@@ -200,6 +228,7 @@ class ResNetBlock(nn.Sequential):
         activation="ReLU",
         dim: int = 2,
         device=None,
+        ConvLayerCheckpoints = False,
         dtype=torch.complex64,
     ):
         """
@@ -243,6 +272,7 @@ class ResNetBlock(nn.Sequential):
             activation=activation,
             dim = dim,
             device=device,
+            ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
         )
 
@@ -255,6 +285,7 @@ class ResNetBlock(nn.Sequential):
             activation="Identity",
             dim = dim,
             device=device,
+            ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
         )
 
@@ -273,6 +304,8 @@ class ResNetBlocksModule(nn.Module):
         scale_factor=0.1,
         dim: int = 2,
         device=None,
+        ConvLayerCheckpoints = False,
+        ResNetCheckpoints = False,
         dtype=torch.complex64,
     ):
         """
@@ -314,6 +347,7 @@ class ResNetBlocksModule(nn.Module):
     """
         super().__init__()
         self.dim = dim
+        self.ResNetCheckpoints = ResNetCheckpoints
         self.layers = nn.ModuleList(
             [
                 ResNetBlock(
@@ -324,6 +358,7 @@ class ResNetBlocksModule(nn.Module):
                     activation=activation,
                     dim = dim,
                     device=device,
+                    ConvLayerCheckpoints = ConvLayerCheckpoints,
                     dtype=dtype,
                 )
                 for _ in range(num_of_resblocks)
@@ -337,10 +372,26 @@ class ResNetBlocksModule(nn.Module):
         self,
         images: torch.Tensor,
     ) -> torch.Tensor:
-        for i,layer in enumerate(self.layers):
-            images = images + self.scale_factor * layer(images)
+
+        if self.ResNetCheckpoints:
+            for i,layer in enumerate(self.layers):
+                # images = images + self.scale_factor * layer(images)
+                images = checkpoint(self.CalcLayer, images, layer, use_reentrant=False)
+
+        else:
+            for i,layer in enumerate(self.layers):
+                images = images + self.scale_factor * layer(images)
 
         return images
+
+    def CalcLayer(
+        self,
+        images: torch.Tensor,
+        layer,
+    ) -> torch.Tensor:
+
+        return images + self.scale_factor * layer(images)
+        
 
 
 class ResNet(nn.Module):
@@ -357,6 +408,8 @@ class ResNet(nn.Module):
         timing_level=0,
         validation_level=0,
         device=None,
+        ConvLayerCheckpoints: bool = False,
+        ResNetCheckpoints = False,
         dtype=torch.complex64,
     ):
 
@@ -409,6 +462,7 @@ class ResNet(nn.Module):
             activation="Identity",
             dim = dim,
             device=device,
+            ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
         )
         
@@ -421,6 +475,8 @@ class ResNet(nn.Module):
             num_of_resblocks=num_of_resblocks,
             dim = dim,
             device=device,
+            ConvLayerCheckpoints = ConvLayerCheckpoints,
+            ResNetCheckpoints = ResNetCheckpoints,
             dtype=dtype,
         )
         
@@ -433,6 +489,7 @@ class ResNet(nn.Module):
             activation="Identity",
             dim = dim,
             device=device,
+            ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
         )
 
@@ -445,6 +502,7 @@ class ResNet(nn.Module):
             activation="Identity",
             dim = dim,
             device=device,
+            ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
         )
 
