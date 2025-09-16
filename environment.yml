@@ -13,6 +13,7 @@ dependencies:
   - pre-commit
   - ruff
   - s3fs
+  - scipy
   - scikit-image
   - threadpoolctl
   - tqdm
