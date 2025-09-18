@@ -1,5 +1,6 @@
 import itertools
 from typing import Tuple
+import os
 
 import torch
 import torch.distributed as dist
@@ -11,7 +12,7 @@ from tqdm import tqdm
 from ..utils.validation import timing_layer, validation_layer
 from .dc import DataConsistency
 from .resnet import ResNet
-import torch.profiler
+
 
 
 class ExponentialMovingAverageModel(AveragedModel):
@@ -76,7 +77,6 @@ class UnrolledNet(nn.Module):
         device=None,
         ConvLayerCheckpoints: bool = False,
         ResNetCheckpoints: bool = False,
-        profiler: bool = False,
         dtype=torch.complex64,
     ):
         """
@@ -124,6 +124,12 @@ class UnrolledNet(nn.Module):
     """
         super().__init__()
 
+        self.phase_normalization = phase_normalization
+        self.num_unroll_blocks = num_unroll_blocks
+        self.disable_progress_bar = disable_progress_bar
+        self.timing_level = timing_level
+        self.validation_level = validation_level
+        
         nX, nY, nZ, nTI, nTE = shape
         contrasts = nTI * nTE
         dim = len(axes)
@@ -141,8 +147,6 @@ class UnrolledNet(nn.Module):
         else:
             dc_device = device
             resnet_device = device
-
-        
         
         self.regularizer = ResNet(
             contrasts=contrasts,
@@ -159,7 +163,8 @@ class UnrolledNet(nn.Module):
             ResNetCheckpoints = ResNetCheckpoints,
             device=dc_device,
             dtype=dtype,
-        )
+        ).to(device)
+        
         self.dc = DataConsistency(
             shape,
             niter=CG_Iter,
@@ -169,14 +174,7 @@ class UnrolledNet(nn.Module):
             axes = axes,
             device=resnet_device,
             dtype=dtype,
-        )
-        self.num_unroll_blocks = num_unroll_blocks
-        self.phase_normalization = phase_normalization
-        self.disable_progress_bar = disable_progress_bar
-        self.timing_level = timing_level
-        self.validation_level = validation_level
-        self.profiler = profiler
-        self.device = device
+        ).to(device)
 
     @timing_layer
     @validation_layer
@@ -187,6 +185,7 @@ class UnrolledNet(nn.Module):
         kspace_mask: torch.Tensor = None,
         sensitivity_maps: torch.Tensor = None,
     ) -> torch.Tensor:
+        
         if self.phase_normalization:
             images_phase = torch.exp(1j * torch.angle(images_regridded[..., 0, 0]))
             images_regridded = images_regridded / images_phase[..., None, None]
@@ -201,44 +200,9 @@ class UnrolledNet(nn.Module):
 
         images = images_regridded.clone().detach()
 
-        if self.profiler:
-            for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
-                # --- Profiling für ResNet (regularizer) ---
-                with torch.profiler.profile(
-                    activities=[torch.profiler.ProfilerActivity.CUDA],
-                    schedule=torch.profiler.schedule(wait=0, warmup=0, active=1),
-                    on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/resnet'),
-                    record_shapes=True,
-                    profile_memory=True,
-                    with_stack=True
-                ) as prof_resnet:
-                    images = checkpoint(self.regularizer, images, use_reentrant=False)
-                    prof_resnet.step()
-        
-                # Speicherverbrauch nach ResNet ausgeben
-                print("Memory after ResNet:")
-                print(torch.cuda.memory_summary(device=self.device, abbreviated=False))
-        
-                # --- Profiling für DataConsistency (dc) ---
-                with torch.profiler.profile(
-                    activities=[torch.profiler.ProfilerActivity.CUDA],
-                    schedule=torch.profiler.schedule(wait=0, warmup=0, active=1),
-                    on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/dc'),
-                    record_shapes=True,
-                    profile_memory=True,
-                    with_stack=True
-                ) as prof_dc:
-                    images = checkpoint(self.dc, images, use_reentrant=False)
-                    prof_dc.step()
-        
-                # Speicherverbrauch nach DataConsistency ausgeben
-                print("Memory after DataConsistency:")
-                print(torch.cuda.memory_summary(device=self.device, abbreviated=False))
-
-        else:
-            for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
-                images = checkpoint(self.regularizer, images, use_reentrant=False)
-                images = checkpoint(self.dc, images, use_reentrant=False)
+        for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
+            images = checkpoint(self.regularizer, images, use_reentrant=False)
+            images = checkpoint(self.dc, images, use_reentrant=False)
 
         if self.phase_normalization:
             images = images * images_phase[..., None, None]

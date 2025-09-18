@@ -61,14 +61,15 @@ def env2dict():
     return options
 
 
-def options_parser():
+def options_parser(file_path: str = "../../zs-ssl-recon/schemes/default.yaml"):
     # Read values from config file
     with open(
-        os.getenv("ZS_SSL_RECON_CONFIG_FILE", default="../schemes/default.yaml"), "r"
+        os.getenv("ZS_SSL_RECON_CONFIG_FILE", default= file_path), "r"
     ) as file:
         options = yaml.safe_load(file)
 
     if isinstance(options["slices"], dict):
+
         options["slices"] = list(
             range(
                 options["slices"]["start"],
