@@ -22,7 +22,9 @@ class CorrectionScan:
         Parameters
         ----------
         ktraj : np.ndarray, shape (1, N, 2),
+            K-space trajectory.
         sig : np.ndarray, shape (C, N, 2),
+            Magnitude signal.
         
         """
         self.window = window
@@ -41,8 +43,13 @@ class CorrectionScan:
         d_intervalls = [sig[:, slice(itv[0], itv[1]), :] for itv in intervall_borders]
 
         # Interpolate signal to equidistant trajectory samples
+        k_interp, d_interp = _interpolate_intervalls(k_intervalls, d_intervalls)
 
+        # Calculate cross spectrum
+        g = _cross_spectrum(d_interp[..., 0], d_interp[..., 1])
+        
 
+    
 
 class GradCorrection:
     def __init__(
@@ -86,7 +93,7 @@ def _window_selection(
     x_limits: Optional[Tuple[int, int]] = None,
 ) -> np.ndarray:
     """
-    Filter a array of indices so that each index is seperated
+    Filter a array of indices aso that each index is seperated
     from its neighbour by window/2.
 
     Parameters
@@ -140,16 +147,16 @@ def _interpolate_signal(
     ktraj : np.ndarray, shape (1, N, 2)
         Trajectory data with 2 echoes.
     signal : np.ndarray, shape (C, N, 2)
-        Signal data with C channels, N samples and 2 echoes.
+        Signal magnitude data with C channels, N samples and 2 echoes.
 
     Returns
     -------
     ktraj_interpolate : np.ndarray (1, M, 2)
         Interpolated trajectory. Values are sorted in ascending order.
     signal_interpolate :np.ndarray (C, M, 2)
-        Interpolated signal.
+        Interpolated magnitude signal.
     """
-    
+
     num_cha, _, num_echo = signal.shape
 
     # Find max and min trajectory
@@ -160,18 +167,51 @@ def _interpolate_signal(
 
     # Interpolate
     shape_signal_interp = (num_cha, ktraj_interpolate.size, num_echo)
-    signal_interpolate = np.zeros(shape_signal_interp, dtype=np.complex64)
+    signal_interpolate = np.zeros(shape_signal_interp, dtype=np.float32)
     for n_echo in range(num_echo):
-        finterp = make_interp_spline(
-            ktraj[0, :, n_echo], signal[..., n_echo], k=1, axis=1
-        )
+        k = ktraj[0, :, n_echo]
+        s = signal[..., n_echo]
+        
+        if k[0] > k[1]:  # interpolation need increasing x
+            k = k[::-1]
+            s = s[:, ::-1]
+
+        finterp = make_interp_spline(k, s, k=1, axis=1)
 
         signal_interpolate[..., n_echo] = finterp(ktraj_interpolate)
 
     # Return interpolated trajectory in same dimensions as input traj
     ktraj_interpolate = np.broadcast_to(
         ktraj_interpolate[None, :, None],
-        (1, ktraj_interpolate.shape[1], num_echo)
+        (1, ktraj_interpolate.size, num_echo)
     )
 
     return ktraj_interpolate, signal_interpolate
+
+def _interpolate_intervalls(
+        k_list: list[np.ndarray], d_list: list[np.ndarray]
+    ) -> Tuple[list[np.ndarray], list[np.ndarray]]:
+            """Return the interpolated signal and trajectory data
+            for each element of d_list and k_list."""
+            k_list_out, d_list_out = [], []
+
+            for k, d in zip(k_list, d_list):
+                k_interp, d_interp = _interpolate_signal(k, d)
+                k_list_out.append(k_interp)
+                d_list_out.append(d_interp)
+
+            return k_list_out, d_list_out
+
+def _cross_spectrum(x: np.ndarray, y :np.ndarray) -> np.ndarray:
+    """Calculate the cross spectrum of x and y. x and y must have shape (C, M)
+    and the cross spectrum is calculated along M"""
+    num_cha, num_samples = x.shape
+
+    fft_1 = np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(x)))
+    fft_2 = np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(y)))
+
+    g = fft_1 * np.conjugate(fft_2)
+
+    return g
+
+    
