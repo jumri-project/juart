@@ -5,7 +5,7 @@ from typing import Optional, Union
 import torch
 from scipy.spatial import KDTree
 from torch.nn.functional import grid_sample
-from torch_geometric.utils import lexsort
+#from torch_geometric.utils import lexsort
 from tqdm.auto import tqdm
 
 from ..conopt.functional.fourier import (
