@@ -1,7 +1,7 @@
+from typing import Tuple
+
 import torch
 import torch.nn as nn
-from torch.nn.utils.parametrizations import spectral_norm
-from typing import Tuple
 
 from torch.utils.checkpoint import checkpoint
 
@@ -31,69 +31,9 @@ class ComplexActivation(nn.Module):
         self,
         images: torch.Tensor,
     ) -> torch.Tensor:
-        return torch.complex(self.functional(images.real), self.functional(images.imag))
-
-
-class StableConv2D(nn.Conv2d):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        padding=0,
-        dilation=1,
-        groups=1,
-        bias=True,
-        padding_mode="zeros",
-        epsilon=1e-5,
-        device=None,
-        dtype=None,
-    ):
-        super().__init__(
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride=stride,
-            padding=padding,
-            dilation=dilation,
-            groups=groups,
-            bias=bias,
-            padding_mode=padding_mode,
-            device=device,
-            dtype=dtype,
-        )
-
-        self.epsilon = epsilon
-
-    def forward(
-        self,
-        images: torch.Tensor,
-    ) -> torch.Tensor:
-        weight_mean = self.weight.mean(
-            dim=(1, 2, 3),
-            keepdim=True,
-        )
-
-        weight_std = (
-            self.weight.std(
-                dim=(1, 2, 3),
-                keepdim=True,
-            )
-            + self.epsilon
-        )
-
-        weight_standardized = (self.weight - weight_mean) / weight_std
-
-        
-        return nn.functional.conv2d(
-            images,
-            weight_standardized,
-            bias=self.bias,
-            stride=self.stride,
-            padding=self.padding,
-            dilation=self.dilation,
-            groups=self.groups,
+        return torch.complex(
+            self.functional(images.real),
+            self.functional(images.imag),
         )
 
 
@@ -102,12 +42,13 @@ class ConvLayer(nn.Module):
         self,
         in_channels,
         out_channels,
-        kernel_size: Tuple[int] = (3,3,),
+        kernel_size: Tuple[int] = (
+            3,
+            3,
+        ),
         dim: int = 2,
         padding=1,
         bias=False,
-        weight_standardization=False,
-        spectral_normalization=False,
         activation="ReLU",
         device=None,
         ConvLayerCheckpoints = False,
@@ -135,11 +76,6 @@ class ConvLayer(nn.Module):
             The Padding thats added to all four sides of the input (default is 1).
         bias: bool, optional
             If True it will add a learnable bias to the output (default is False)
-        weight_standardization : bool, optional
-            Activates the weight standardization that sets the mean of the weights to 0 
-            and their deviation to 1(default is False).
-        spectral_normalization: bool, optional
-            Activates the spectral normalization (default is False).
         activation: str, optional
             defines the kind of activation function (default is "ReLu")
         num_of_resblocks : int, optional
@@ -155,7 +91,7 @@ class ConvLayer(nn.Module):
             (default is None, which uses the current device).
 
         NOTE: This function is under development and may not be fully functional yet.
-    """
+        """
 
         super().__init__()
         self.ConvLayerCheckpoints = ConvLayerCheckpoints
@@ -172,9 +108,6 @@ class ConvLayer(nn.Module):
                 dtype=dtype,
             )
 
-            if spectral_normalization:
-                conv2d = spectral_norm(conv2d)
-
         elif dim == 3:
             self.convlayer = nn.Conv3d(
                 in_channels,
@@ -185,9 +118,6 @@ class ConvLayer(nn.Module):
                 device=device,
                 dtype=dtype,
             )
-
-            if spectral_normalization:
-                conv3d = spectral_norm(conv3d)
 
         if activation == "Identity":
             self.function = nn.Identity()
@@ -244,7 +174,7 @@ class ResNetBlock(nn.Sequential):
             forms the tuple that is used for the convolutions (X, Y, Z)
             (default is (3,3)).
         weight_standardization : bool, optional
-            Activates the weight standardization that sets the mean of the weights to 0 
+            Activates the weight standardization that sets the mean of the weights to 0
             and their deviation to 1(default is False).
         spectral_normalization: bool, optional
             Activates the spectral normalization (default is False).
@@ -262,15 +192,13 @@ class ResNetBlock(nn.Sequential):
             (default is None, which uses the current device).
 
         NOTE: This function is under development and may not be fully functional yet.
-    """
+        """
         conv_layer_1 = ConvLayer(
             features,
             features,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation=activation,
-            dim = dim,
+            dim=dim,
             device=device,
             ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
@@ -280,10 +208,8 @@ class ResNetBlock(nn.Sequential):
             features,
             features,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation="Identity",
-            dim = dim,
+            dim=dim,
             device=device,
             ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
@@ -296,9 +222,7 @@ class ResNetBlocksModule(nn.Module):
     def __init__(
         self,
         features,
-        kernel_size=(3,3),
-        weight_standardization=False,
-        spectral_normalization=False,
+        kernel_size=(3, 3),
         activation="ReLU",
         num_of_resblocks=15,
         scale_factor=0.1,
@@ -320,11 +244,6 @@ class ResNetBlocksModule(nn.Module):
         kernel_size : Tuple[int], optional
             forms the tuple that is used for the convolutions (X, Y, Z)
             (default is (3,3)).
-        weight_standardization : bool, optional
-            Activates the weight standardization that sets the mean of the weights to 0 
-            and their deviation to 1(default is False).
-        spectral_normalization: bool, optional
-            Activates the spectral normalization (default is False).
         activation: str, optional
             defines the kind of activation function (default is "ReLu")
         num_of_resblocks : int, optional
@@ -344,7 +263,7 @@ class ResNetBlocksModule(nn.Module):
             (default is None, which uses the current device).
 
         NOTE: This function is under development and may not be fully functional yet.
-    """
+        """
         super().__init__()
         self.dim = dim
         self.ResNetCheckpoints = ResNetCheckpoints
@@ -353,10 +272,8 @@ class ResNetBlocksModule(nn.Module):
                 ResNetBlock(
                     features,
                     kernel_size,
-                    weight_standardization=weight_standardization,
-                    spectral_normalization=spectral_normalization,
                     activation=activation,
-                    dim = dim,
+                    dim=dim,
                     device=device,
                     ConvLayerCheckpoints = ConvLayerCheckpoints,
                     dtype=dtype,
@@ -374,12 +291,12 @@ class ResNetBlocksModule(nn.Module):
     ) -> torch.Tensor:
 
         if self.ResNetCheckpoints:
-            for i,layer in enumerate(self.layers):
+            for i, layer in enumerate(self.layers):
                 # images = images + self.scale_factor * layer(images)
                 images = checkpoint(self.CalcLayer, images, layer, use_reentrant=False)
 
         else:
-            for i,layer in enumerate(self.layers):
+            for i, layer in enumerate(self.layers):
                 images = images + self.scale_factor * layer(images)
 
         return images
@@ -391,7 +308,6 @@ class ResNetBlocksModule(nn.Module):
     ) -> torch.Tensor:
 
         return images + self.scale_factor * layer(images)
-        
 
 
 class ResNet(nn.Module):
@@ -400,10 +316,8 @@ class ResNet(nn.Module):
         contrasts=1,
         features=128,
         num_of_resblocks=15,
-        kernel_size: Tuple[int] = (3,3),
+        kernel_size: Tuple[int] = (3, 3),
         dim: int = 2,
-        weight_standardization=False,
-        spectral_normalization=False,
         activation="ReLU",
         timing_level=0,
         validation_level=0,
@@ -412,7 +326,6 @@ class ResNet(nn.Module):
         ResNetCheckpoints = False,
         dtype=torch.complex64,
     ):
-
         """
         Initializes a ResNet class with a variable number of resblocks and ConvLayers.
 
@@ -433,11 +346,6 @@ class ResNet(nn.Module):
             dimension of the kspace data, important for the convolution class.
             Can often be describes out of another property like axes or kernel.
             (default is 2)
-        weight_standardization : bool, optional
-            Activates the weight standardization that sets the mean of the weights to 0 
-            and their deviation to 1(default is False).
-        spectral_normalization: bool, optional
-            Activates the spectral normalization (default is False).
         activation: str, optional
             defines the kind of activation function (default is "ReLu")
         kernel_size: Tuple[int], optional
@@ -448,46 +356,40 @@ class ResNet(nn.Module):
             (default is None, which uses the current device).
 
         NOTE: This function is under development and may not be fully functional yet.
-    """
+        """
         super().__init__()
 
         self.dim = dim
-        
+
         self.layer1 = ConvLayer(
             contrasts,
             features,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation="Identity",
-            dim = dim,
+            dim=dim,
             device=device,
             ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
         )
-        
+
         self.layer2 = ResNetBlocksModule(
             features,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation=activation,
             num_of_resblocks=num_of_resblocks,
-            dim = dim,
+            dim=dim,
             device=device,
             ConvLayerCheckpoints = ConvLayerCheckpoints,
             ResNetCheckpoints = ResNetCheckpoints,
             dtype=dtype,
         )
-        
+
         self.layer3 = ConvLayer(
             features,
             features,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation="Identity",
-            dim = dim,
+            dim=dim,
             device=device,
             ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
@@ -497,10 +399,8 @@ class ResNet(nn.Module):
             features,
             contrasts,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation="Identity",
-            dim = dim,
+            dim=dim,
             device=device,
             ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
@@ -514,38 +414,58 @@ class ResNet(nn.Module):
     @validation_layer
     def forward(
         self,
-        images: torch.Tensor, # shape: [nX,nY,nZ,nTI,nTE]
+        images: torch.Tensor,  # shape: [nX,nY,nZ,nTI,nTE]
     ) -> torch.Tensor:
         images = images.to(self.device)
 
         if self.dim == 2:
             nTI, nTE = images.shape[-2:]
-            
-            images = images[None, :, :, 0, :, :] # switches shape to [blank, nX, nY, nTI, nTE]
-            images = torch.permute(images, (0, 3, 4, 1, 2)) # switches shape to [blank, nTI, nTE, nX, nY]
-            images = torch.flatten(images, start_dim=1, end_dim=2) # switches shape to [blank, nTI*nTE, nX, nY]
-            
+
+            images = images[
+                None, :, :, 0, :, :
+            ]  # switches shape to [blank, nX, nY, nTI, nTE]
+            images = torch.permute(
+                images, (0, 3, 4, 1, 2)
+            )  # switches shape to [blank, nTI, nTE, nX, nY]
+            images = torch.flatten(
+                images, start_dim=1, end_dim=2
+            )  # switches shape to [blank, nTI*nTE, nX, nY]
+
             l1_out = self.layer1(images)
             l2_out = self.layer2(l1_out)
             l3_out = self.layer3(l2_out)
             images = self.layer4(l3_out + l1_out)
-    
-            images = torch.unflatten(images, 1, (nTI, nTE)) # switches shape to [blank, nTI, nTE, nX, nY]
-            images = torch.permute(images, (0, 3, 4, 1, 2)) # switches shape to [blank, nX, nY, nTI, nTE]
-            images = images[0, :, :, None, :, :] # switches shape back to [nX, nY, nZ, nTI, nTE]
+
+            images = torch.unflatten(
+                images, 1, (nTI, nTE)
+            )  # switches shape to [blank, nTI, nTE, nX, nY]
+            images = torch.permute(
+                images, (0, 3, 4, 1, 2)
+            )  # switches shape to [blank, nX, nY, nTI, nTE]
+            images = images[
+                0, :, :, None, :, :
+            ]  # switches shape back to [nX, nY, nZ, nTI, nTE]
 
         if self.dim == 3:
             nTI, nTE = images.shape[-2:]
-            
-            images = torch.permute(images, (3, 4, 0, 1, 2)) # switches shape to [nTI, nTE, nX, nY, nZ]
-            images = torch.flatten(images, start_dim=0, end_dim=1) # switches shape to [nTI * nTE, nX, nY, nZ]
-            
+
+            images = torch.permute(
+                images, (3, 4, 0, 1, 2)
+            )  # switches shape to [nTI, nTE, nX, nY, nZ]
+            images = torch.flatten(
+                images, start_dim=0, end_dim=1
+            )  # switches shape to [nTI * nTE, nX, nY, nZ]
+
             l1_out = self.layer1(images)
             l2_out = self.layer2(l1_out)
             l3_out = self.layer3(l2_out)
             images = self.layer4(l3_out + l1_out)
-    
-            images = torch.unflatten(images, 0, (nTI, nTE)) # switches shape to [nTI, nTE, nX, nY, nZ]
-            images = torch.permute(images, (2, 3, 4, 0, 1)) # switches shape to [nX, nY, nZ, nTI, nTE]
-        
+
+            images = torch.unflatten(
+                images, 0, (nTI, nTE)
+            )  # switches shape to [nTI, nTE, nX, nY, nZ]
+            images = torch.permute(
+                images, (2, 3, 4, 0, 1)
+            )  # switches shape to [nX, nY, nZ, nTI, nTE]
+
         return images

@@ -1,5 +1,4 @@
 import torch
-from typing import Tuple
 
 from torch import distributed as dist
 from ..utils.dist import gather_and_average_losses
@@ -26,6 +25,7 @@ def training(
             data = dataset[index]
 
             print(f"Rank {dist.get_rank()} - reading data")
+
             images_regridded = data["images_regridded"].to(device)
             kspace_trajectory = data["kspace_trajectory"].to(device)
             kspace_data = data["kspace_data"].to(device)
@@ -35,14 +35,14 @@ def training(
             print(f"Rank {dist.get_rank()} - reading data done -> model initialization")
             # Forward path:
             dist.barrier()
-                
+
             images_reconstructed = model(
                 images_regridded,
                 kspace_trajectory,
                 kspace_mask=kspace_mask_source,
                 sensitivity_maps=sensitivity_maps,
             )
-               
+
             print(f"Rank {dist.get_rank()} - model initialization done -> loss fn initialization")
             dist.barrier()
             # Loss

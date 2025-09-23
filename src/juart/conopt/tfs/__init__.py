@@ -48,7 +48,7 @@ def apply_transfer_function(
 
     # Perform forward Fourier transform
     x = fourier_transform_forward(x, axes)
-    
+
     # Apply the transfer function
     x = transfer_function * x
 
@@ -58,6 +58,5 @@ def apply_transfer_function(
     # Crop back to the original shape
     if pad_shape != shape:
         x = crop_tensor(x, shape)
-
 
     return x.clone()  # Clone to ensure memory continuity

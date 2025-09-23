@@ -12,6 +12,7 @@ from tqdm import tqdm
 from ..utils.validation import timing_layer, validation_layer
 from .dc import DataConsistency
 from .resnet import ResNet
+from .unet import UNet
 
 
 
@@ -64,16 +65,15 @@ class UnrolledNet(nn.Module):
         num_unroll_blocks=10,
         num_res_blocks=15,
         features=128,
-        weight_standardization=False,
-        spectral_normalization=False,
         activation="ReLU",
         lamda_start=0.05,
         phase_normalization=False,
         disable_progress_bar=False,
         timing_level=0,
         validation_level=0,
-        kernel_size: Tuple[int] = (3,3),
-        axes: Tuple[int] = (1,2),
+        kernel_size: Tuple[int] = (3, 3),
+        regularizer="ResNet",
+        axes: Tuple[int] = (1, 2),
         device=None,
         ConvLayerCheckpoints: bool = False,
         ResNetCheckpoints: bool = False,
@@ -81,7 +81,7 @@ class UnrolledNet(nn.Module):
     ):
         """
         Initializes an UnrollNet as a neural Network with a number of ResNet Layers (ConvLayers) and a data consistency layer.
-    
+
         Parameters
         ----------
         shape : torch.Tensor, shape (nX, nY, nZ, nTI, nTE)
@@ -92,12 +92,12 @@ class UnrolledNet(nn.Module):
             Number of iterations in the loop of data consistency term and regularization
             term (default is 10).
         num_res_blocks : int, optional
-            Number of ResNetBlocks that should be added to the second layer of the 
+            Number of ResNetBlocks that should be added to the second layer of the
             ResNet (default is 15).
         features : int, optional
             Number of the features of the neural network (default is 128).
         weight_standardization : bool, optional
-            Activates the weight standardization that sets the mean of the weights to 0 
+            Activates the weight standardization that sets the mean of the weights to 0
             and their deviation to 1(default is False).
         spectral_normalization: bool, optional
             Activates the spectral normalization (default is False).
@@ -121,7 +121,7 @@ class UnrolledNet(nn.Module):
             the device used for the resnet.
 
         NOTE: This function is under development and may not be fully functional yet.
-    """
+        """
         super().__init__()
 
         self.phase_normalization = phase_normalization
@@ -147,32 +147,37 @@ class UnrolledNet(nn.Module):
         else:
             dc_device = device
             resnet_device = device
-        
-        self.regularizer = ResNet(
-            contrasts=contrasts,
-            features=features,
-            num_of_resblocks=num_res_blocks,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
-            activation=activation,
-            kernel_size = kernel_size,
-            timing_level=timing_level - 1,
-            validation_level=validation_level - 1,
-            dim = dim,
-            ConvLayerCheckpoints = ConvLayerCheckpoints,
-            ResNetCheckpoints = ResNetCheckpoints,
-            device=dc_device,
-            dtype=dtype,
-        ).to(device)
-        
+
+        if regularizer == "ResNet":
+            self.regularizer = ResNet(
+                contrasts=contrasts,
+                features=features,
+                num_of_resblocks=num_res_blocks,
+                activation=activation,
+                kernel_size=kernel_size,
+                timing_level=timing_level - 1,
+                validation_level=validation_level - 1,
+                dim=dim,
+                device=device,
+                dtype=dtype,
+            )
+
+        elif regularizer == "UNet":
+            self.regularizer = UNet(
+                contrasts=contrasts,
+                features=features,
+                device=device,
+                dtype=dtype,
+            )
+
         self.dc = DataConsistency(
             shape,
             niter=CG_Iter,
             lamda_start=lamda_start,
             timing_level=timing_level - 1,
             validation_level=validation_level - 1,
-            axes = axes,
-            device=resnet_device,
+            axes=axes,
+            device=device,
             dtype=dtype,
         ).to(device)
 
@@ -195,7 +200,7 @@ class UnrolledNet(nn.Module):
             images_regridded,
             kspace_trajectory,
             kspace_mask=kspace_mask,
-            sensitivity_maps=sensitivity_maps
+            sensitivity_maps=sensitivity_maps,
         )
 
         images = images_regridded.clone().detach()

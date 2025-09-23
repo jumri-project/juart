@@ -31,7 +31,7 @@ class WaveletTransformOperator(LinearOperator):
         Parameters:
         ----------
         input_shape : tuple of int
-            Shape of the input tensor (nX, nY, nZ, nS, nTI, nTE).
+            Shape of the input tensor.
         wavelet : str, optional
             Type of wavelet to use for the transformation (default is 'db2').
         level : int, optional
@@ -40,7 +40,6 @@ class WaveletTransformOperator(LinearOperator):
             Axes along which the wavelet transform is applied (default is (0, 1)).
         """
         # Number of dimensions for wavelet decomposition
-        nX, nY, nZ, nS, nTI, nTE = input_shape
         nD = (3 * level) + 1
 
         # Calculate wavelet transfer functions for the axes

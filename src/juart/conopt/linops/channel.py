@@ -24,22 +24,16 @@ class ChannelOperator(LinearOperator):
         Parameters:
         ----------
         coil_sensitivities : torch.Tensor
-            Coil sensitivity maps (nC, nX, nY, nZ).
+            Coil sensitivity maps (C, X, Y, Z, S).
         data_shape : tuple of int
-            Shape of the data (nX, nY, nZ, nS, nTI, nTE).
+            Shape of the data (C, X, Y, Z, S, ...).
         normalize : bool, optional
             Whether to normalize to unit spectral norm (default is True).
         device : str, optional
             Device on which the operator will run ('cpu' or 'cuda').
         """
         # Unpack the data shape
-        _, nX, nY, nZ, *add_axes = data_shape
-
-        # Number of channels (coils)
-        nC = coil_sensitivities.shape[0]
-        
-        coil_sensitivities = coil_sensitivities.unsqueeze(-1)
-        coil_sensitivities = coil_sensitivities.expand(-1, -1, -1, -1, *add_axes)
+        nC, nX, nY, nZ, nS, *add_dims = data_shape
 
         # Device and dtype
         self.device = device
@@ -47,8 +41,8 @@ class ChannelOperator(LinearOperator):
         self.internal_dtype = torch.complex64
 
         # Define forward and adjoint shapes
-        self.forward_shape = (1, *data_shape[1:])
-        self.adjoint_shape = (nC, *data_shape[1:])
+        self.forward_shape = (1, nX, nY, nZ, nS, *add_dims)
+        self.adjoint_shape = (nC, nX, nY, nZ, nS, *add_dims)
 
         # Define the shape for complex-to-real operations
         self.shape = (
@@ -58,19 +52,17 @@ class ChannelOperator(LinearOperator):
         coil_sensitivities = coil_sensitivities.to(device)
 
         # Store coil sensitivities, ensuring correct dimensions and device
-        self.coil_sensitivities = torch.broadcast_to(
-            coil_sensitivities,
-            (*coil_sensitivities.shape[:4], *add_axes),
+        self.coil_sensitivities = coil_sensitivities.reshape(
+            coil_sensitivities.shape + len(add_dims) * (1,)
         )
 
         # Normalize to unit spectral norm if required
         if normalize:
-            self.coil_sensitivities = (
-                self.coil_sensitivities
-                / torch.sqrt(
-                    torch.sum(torch.abs(self.coil_sensitivities) ** 2, dim=0)
-                ).max()
-            )
+            norm = torch.sqrt(
+                torch.sum(torch.abs(self.coil_sensitivities) ** 2, dim=0)
+            ).max()
+
+            self.coil_sensitivities = self.coil_sensitivities / norm
 
     def _matvec(
         self,
@@ -130,7 +122,8 @@ class ChannelOperator(LinearOperator):
         # Apply the adjoint (combining the signals using the conjugate of the
         # sensitivities)
         output_tensor = torch.sum(
-            torch.conj(self.coil_sensitivities) * coil_data, dim=0
+            torch.conj(self.coil_sensitivities) * coil_data,
+            dim=0,
         )
 
         # Flatten the result and cast back to the external dtype

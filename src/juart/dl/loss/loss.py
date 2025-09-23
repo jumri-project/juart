@@ -265,7 +265,7 @@ class KSpaceLoss(nn.Module):
             )
 
             kspace_data_reconstructed = kspace_data_reconstructed * kspace_mask
-            
+
             kspace_data_reference = kspace_data * kspace_mask
 
             print(
