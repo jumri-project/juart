@@ -296,6 +296,7 @@ class KSpaceData:
         # Otherwise comp_matrix does not fit to data
 
         num_indices = NLin * NSet * NEco
+
         func = partial(
             KSpaceData.process_fourier_coil_compression,
             shared_comp_matrix=comp_matrix,
