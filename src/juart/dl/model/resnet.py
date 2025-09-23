@@ -2,7 +2,6 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from torch.nn.utils.parametrizations import spectral_norm
 
 from ..utils.validation import timing_layer, validation_layer
 
@@ -30,68 +29,9 @@ class ComplexActivation(nn.Module):
         self,
         images: torch.Tensor,
     ) -> torch.Tensor:
-        return torch.complex(self.functional(images.real), self.functional(images.imag))
-
-
-class StableConv2D(nn.Conv2d):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        padding=0,
-        dilation=1,
-        groups=1,
-        bias=True,
-        padding_mode="zeros",
-        epsilon=1e-5,
-        device=None,
-        dtype=None,
-    ):
-        super().__init__(
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride=stride,
-            padding=padding,
-            dilation=dilation,
-            groups=groups,
-            bias=bias,
-            padding_mode=padding_mode,
-            device=device,
-            dtype=dtype,
-        )
-
-        self.epsilon = epsilon
-
-    def forward(
-        self,
-        images: torch.Tensor,
-    ) -> torch.Tensor:
-        weight_mean = self.weight.mean(
-            dim=(1, 2, 3),
-            keepdim=True,
-        )
-
-        weight_std = (
-            self.weight.std(
-                dim=(1, 2, 3),
-                keepdim=True,
-            )
-            + self.epsilon
-        )
-
-        weight_standardized = (self.weight - weight_mean) / weight_std
-
-        return nn.functional.conv2d(
-            images,
-            weight_standardized,
-            bias=self.bias,
-            stride=self.stride,
-            padding=self.padding,
-            dilation=self.dilation,
-            groups=self.groups,
+        return torch.complex(
+            self.functional(images.real),
+            self.functional(images.imag),
         )
 
 
@@ -107,8 +47,6 @@ class ConvLayer(nn.Sequential):
         dim: int = 2,
         padding=1,
         bias=False,
-        weight_standardization=False,
-        spectral_normalization=False,
         activation="ReLU",
         device=None,
         dtype=torch.complex64,
@@ -135,11 +73,6 @@ class ConvLayer(nn.Sequential):
             The Padding thats added to all four sides of the input (default is 1).
         bias: bool, optional
             If True it will add a learnable bias to the output (default is False)
-        weight_standardization : bool, optional
-            Activates the weight standardization that sets the mean of the weights to 0
-            and their deviation to 1(default is False).
-        spectral_normalization: bool, optional
-            Activates the spectral normalization (default is False).
         activation: str, optional
             defines the kind of activation function (default is "ReLu")
         num_of_resblocks : int, optional
@@ -168,9 +101,6 @@ class ConvLayer(nn.Sequential):
                 dtype=dtype,
             )
 
-            if spectral_normalization:
-                conv2d = spectral_norm(conv2d)
-
         elif dim == 3:
             convlayer = nn.Conv3d(
                 in_channels,
@@ -181,9 +111,6 @@ class ConvLayer(nn.Sequential):
                 device=device,
                 dtype=dtype,
             )
-
-            if spectral_normalization:
-                conv3d = spectral_norm(conv3d)
 
         if activation == "Identity":
             function = nn.Identity()
@@ -241,8 +168,6 @@ class ResNetBlock(nn.Sequential):
             features,
             features,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation=activation,
             dim=dim,
             device=device,
@@ -253,8 +178,6 @@ class ResNetBlock(nn.Sequential):
             features,
             features,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation="Identity",
             dim=dim,
             device=device,
@@ -269,8 +192,6 @@ class ResNetBlocksModule(nn.Module):
         self,
         features,
         kernel_size=(3, 3),
-        weight_standardization=False,
-        spectral_normalization=False,
         activation="ReLU",
         num_of_resblocks=15,
         scale_factor=0.1,
@@ -290,11 +211,6 @@ class ResNetBlocksModule(nn.Module):
         kernel_size : Tuple[int], optional
             forms the tuple that is used for the convolutions (X, Y, Z)
             (default is (3,3)).
-        weight_standardization : bool, optional
-            Activates the weight standardization that sets the mean of the weights to 0
-            and their deviation to 1(default is False).
-        spectral_normalization: bool, optional
-            Activates the spectral normalization (default is False).
         activation: str, optional
             defines the kind of activation function (default is "ReLu")
         num_of_resblocks : int, optional
@@ -322,8 +238,6 @@ class ResNetBlocksModule(nn.Module):
                 ResNetBlock(
                     features,
                     kernel_size,
-                    weight_standardization=weight_standardization,
-                    spectral_normalization=spectral_normalization,
                     activation=activation,
                     dim=dim,
                     device=device,
@@ -354,8 +268,6 @@ class ResNet(nn.Module):
         num_of_resblocks=15,
         kernel_size: Tuple[int] = (3, 3),
         dim: int = 2,
-        weight_standardization=False,
-        spectral_normalization=False,
         activation="ReLU",
         timing_level=0,
         validation_level=0,
@@ -382,11 +294,6 @@ class ResNet(nn.Module):
             dimension of the kspace data, important for the convolution class.
             Can often be describes out of another property like axes or kernel.
             (default is 2)
-        weight_standardization : bool, optional
-            Activates the weight standardization that sets the mean of the weights to 0
-            and their deviation to 1(default is False).
-        spectral_normalization: bool, optional
-            Activates the spectral normalization (default is False).
         activation: str, optional
             defines the kind of activation function (default is "ReLu")
         kernel_size: Tuple[int], optional
@@ -406,8 +313,6 @@ class ResNet(nn.Module):
             contrasts,
             features,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation="Identity",
             dim=dim,
             device=device,
@@ -417,8 +322,6 @@ class ResNet(nn.Module):
         self.layer2 = ResNetBlocksModule(
             features,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation=activation,
             num_of_resblocks=num_of_resblocks,
             dim=dim,
@@ -430,8 +333,6 @@ class ResNet(nn.Module):
             features,
             features,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation="Identity",
             dim=dim,
             device=device,
@@ -442,8 +343,6 @@ class ResNet(nn.Module):
             features,
             contrasts,
             kernel_size,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
             activation="Identity",
             dim=dim,
             device=device,

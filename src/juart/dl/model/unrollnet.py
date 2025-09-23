@@ -11,6 +11,7 @@ from tqdm import tqdm
 from ..utils.validation import timing_layer, validation_layer
 from .dc import DataConsistency
 from .resnet import ResNet
+from .unet import UNet
 
 
 class ExponentialMovingAverageModel(AveragedModel):
@@ -62,8 +63,6 @@ class UnrolledNet(nn.Module):
         num_unroll_blocks=10,
         num_res_blocks=15,
         features=128,
-        weight_standardization=False,
-        spectral_normalization=False,
         activation="ReLU",
         lamda_start=0.05,
         phase_normalization=False,
@@ -71,6 +70,7 @@ class UnrolledNet(nn.Module):
         timing_level=0,
         validation_level=0,
         kernel_size: Tuple[int] = (3, 3),
+        regularizer="ResNet",
         axes: Tuple[int] = (1, 2),
         device=None,
         dtype=torch.complex64,
@@ -121,20 +121,26 @@ class UnrolledNet(nn.Module):
         contrasts = nTI * nTE
         dim = len(axes)
 
-        self.regularizer = ResNet(
-            contrasts=contrasts,
-            features=features,
-            num_of_resblocks=num_res_blocks,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
-            activation=activation,
-            kernel_size=kernel_size,
-            timing_level=timing_level - 1,
-            validation_level=validation_level - 1,
-            dim=dim,
-            device=device,
-            dtype=dtype,
-        )
+        if regularizer == "ResNet":
+            self.regularizer = ResNet(
+                contrasts=contrasts,
+                features=features,
+                num_of_resblocks=num_res_blocks,
+                activation=activation,
+                kernel_size=kernel_size,
+                timing_level=timing_level - 1,
+                validation_level=validation_level - 1,
+                dim=dim,
+                device=device,
+                dtype=dtype,
+            )
+        elif regularizer == "UNet":
+            self.regularizer = UNet(
+                contrasts=contrasts,
+                features=features,
+                device=device,
+                dtype=dtype,
+            )
         self.dc = DataConsistency(
             shape,
             niter=CG_Iter,
