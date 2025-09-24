@@ -8,7 +8,7 @@ class InteractiveMultiPlotter3D:
         data: list,
         vmin: int = None,
         vmax: int = None,
-        title: str = None,
+        title: list = None,
         cmap: str = "gray",
         description = "Dimension 3:"
     ):
@@ -20,22 +20,22 @@ class InteractiveMultiPlotter3D:
         self.description = description
 
         self.fig, self.ax = plt.subplots(1, len(data))
-        plt.title(self.title)
 
-        i = 0
         if type(self.ax) is np.ndarray:
-            for ax in self.ax:
-                print(ax)
-                ax.imshow = plt.imshow(
+            ims = list()
+            for i, ax in enumerate(self.ax):
+                ax.imshow = self.ax[i].imshow(
                     self.data[i][:, :, 0], vmin=self.vmin, vmax=self.vmax, cmap=self.cmap
                 )
-                i += 1
+                ax.set_title(self.title[i])
+                ims.append(ax.imshow)
+            self.fig.colorbar(ims[-1], ax=self.ax.ravel().tolist(), location="right")
         else:
             self.ax.imshow = plt.imshow(
-                self.data[i][:, :, 0], vmin=self.vmin, vmax=self.vmax, cmap=self.cmap
+                self.data[0][:, :, 0], vmin=self.vmin, vmax=self.vmax, cmap=self.cmap
             )
-
-        self.fig.colorbar(self.ax.imshow)
+            self.ax.set_title(self.title[0])
+            self.fig.colorbar(self.ax.imshow)
 
         self.interactive = interactive(
             self.show,
@@ -49,11 +49,11 @@ class InteractiveMultiPlotter3D:
 
     def show(self, z):
 
-        if type (self.ax) is np.ndarray:
+        if type(self.ax) is np.ndarray:
             for i, ax in enumerate(self.ax):
-    
                 ax.imshow.set_data(self.data[i][:, :, z - 1])
-                self.fig.canvas.flush_events()
+
+            self.fig.canvas.flush_events()
 
         else:
             self.ax.imshow.set_data(self.data[0][:, :, z - 1])
