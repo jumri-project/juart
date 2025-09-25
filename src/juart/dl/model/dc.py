@@ -163,6 +163,7 @@ class DataConsistency(nn.Module):
         kspace_mask: torch.Tensor = None,
         sensitivity_maps: torch.Tensor = None,
     ):
+
         images_regridded = images_regridded.to(self.device)
         kspace_trajectory = kspace_trajectory.to(self.device)
         if kspace_mask is not None:

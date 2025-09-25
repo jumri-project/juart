@@ -206,8 +206,8 @@ class UnrolledNet(nn.Module):
         images = images_regridded.clone().detach()
 
         for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
-            images = checkpoint(self.regularizer, images, use_reentrant=False)
             images = checkpoint(self.dc, images, use_reentrant=False)
+            images = checkpoint(self.regularizer, images, use_reentrant=False)
 
         if self.phase_normalization:
             images = images * images_phase[..., None, None]

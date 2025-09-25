@@ -75,7 +75,7 @@ def training(
             torch.tensor(losses), group=group, device=device
         )
 
-    return averaged_losses.tolist()
+    return averaged_losses.tolist(), images_reconstructed
 
 
 def validation(
