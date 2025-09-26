@@ -155,6 +155,7 @@ class UnrolledNet(nn.Module):
                 num_of_resblocks=num_res_blocks,
                 activation=activation,
                 kernel_size=kernel_size,
+                ResNetCheckpoints = ResNetCheckpoints,
                 timing_level=timing_level - 1,
                 validation_level=validation_level - 1,
                 dim=dim,
@@ -206,8 +207,8 @@ class UnrolledNet(nn.Module):
         images = images_regridded.clone().detach()
 
         for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
-            images = checkpoint(self.dc, images, use_reentrant=False)
             images = checkpoint(self.regularizer, images, use_reentrant=False)
+            images = checkpoint(self.dc, images, use_reentrant=False)
 
         if self.phase_normalization:
             images = images * images_phase[..., None, None]

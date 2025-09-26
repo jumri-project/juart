@@ -326,7 +326,6 @@ class ResNet(nn.Module):
         ResNetCheckpoints = False,
         dtype=torch.complex64,
     ):
-        print(f'resnet init inputs:\nfeatures {features}\kernel_size {kernel_size}\ndim {dim}\nactivation {activation}\nResNetCheckpoints {ResNetCheckpoints}')
         """
         Initializes a ResNet class with a variable number of resblocks and ConvLayers.
 
