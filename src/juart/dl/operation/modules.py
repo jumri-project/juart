@@ -57,26 +57,26 @@ def training(
             print(f"Rank {dist.get_rank()} - loss fn initialization done -> compute backward pass")
             dist.barrier() 
             # Backpropagation
-            #loss.backward()  
+            loss.backward()  
             print(f"Rank {dist.get_rank()} - compute backward pass done -> compute accumulator")
             dist.barrier() 
             # Accumulate gradients
-            #accumulator.accumulate()
+            accumulator.accumulate()
 
-            #losses.append(loss.item())
+            losses.append(loss.item())
 
-        #accumulator.apply()
+        accumulator.apply()
 
-        #optimizer.step()
-        #optimizer.zero_grad()
+        optimizer.step()
+        optimizer.zero_grad()
 
         # Average loss
-        #averaged_losses = gather_and_average_losses(
-        #    torch.tensor(losses), group=group, device=device
-        #)
+        averaged_losses = gather_and_average_losses(
+            torch.tensor(losses), group=group, device=device
+        )
 
     #return averaged_losses.tolist(), images_reconstructed
-    return images_reconstructed
+    return averaged_losses
 
 def validation(
     indices,

@@ -187,6 +187,8 @@ class DataConsistency(nn.Module):
     ) -> torch.Tensor:
         images = images.to(self.device)
 
+        print(self.images_regridded.shape, images.shape)
+        
         images = conj_grad(
             self.toep_ob,
             self.images_regridded + self.lam * images,

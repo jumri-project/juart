@@ -14,6 +14,10 @@ from .dc import DataConsistency
 from .resnet import ResNet
 from .unet import UNet
 
+import sys
+sys.path.insert(0, "../../src")
+from juart.preproc.data import zero_padding
+
 
 
 class ExponentialMovingAverageModel(AveragedModel):
@@ -73,7 +77,6 @@ class UnrolledNet(nn.Module):
         validation_level=0,
         kernel_size: Tuple[int] = (3, 3),
         regularizer="ResNet",
-        axes: Tuple[int] = (1, 2),
         device=None,
         ConvLayerCheckpoints: bool = False,
         ResNetCheckpoints: bool = False,
@@ -105,14 +108,11 @@ class UnrolledNet(nn.Module):
             normalizes the signals phase (default is False).
         disable_progress_bar: bool, optional
             Disable the progress bar output (default is False).
-        axes: tuple[int], optional
-            Defines the dimension of the model (default is (1,2) for 2D; Change to
-            (1,2,3) for 3D)
         activation: str, optional
             defines the kind of activation function (default is "ReLu")
         kernel_size: Tuple[int], optional
-            changes the size of the kernel used in the convolutional layers
-            (default is (3,3))
+            changes the size of the kernel used in the convolutional layers and  its length
+            decides whether all operations should be 2D or 3D. (default is (3,3))
         device : str, optional
             Device on which to perform the computation
             (default is None, which uses the current device).
@@ -124,6 +124,7 @@ class UnrolledNet(nn.Module):
         """
         super().__init__()
 
+        axes = ([n for n in range(1,len(kernel_size)+1,1)])
         self.phase_normalization = phase_normalization
         self.num_unroll_blocks = num_unroll_blocks
         self.disable_progress_bar = disable_progress_bar
@@ -132,7 +133,6 @@ class UnrolledNet(nn.Module):
         
         nX, nY, nZ, nTI, nTE = shape
         contrasts = nTI * nTE
-        dim = len(axes)
 
         if type(device) == list:
             
@@ -148,28 +148,6 @@ class UnrolledNet(nn.Module):
             dc_device = device
             resnet_device = device
 
-        if regularizer == "ResNet":
-            self.regularizer = ResNet(
-                contrasts=contrasts,
-                features=features,
-                num_of_resblocks=num_res_blocks,
-                activation=activation,
-                kernel_size=kernel_size,
-                ResNetCheckpoints = ResNetCheckpoints,
-                timing_level=timing_level - 1,
-                validation_level=validation_level - 1,
-                dim=dim,
-                device=device,
-                dtype=dtype,
-            )
-
-        elif regularizer == "UNet":
-            self.regularizer = UNet(
-                contrasts=contrasts,
-                features=features,
-                device=device,
-                dtype=dtype,
-            )
 
         self.dc = DataConsistency(
             shape,
@@ -197,6 +175,8 @@ class UnrolledNet(nn.Module):
             images_regridded = images_regridded / images_phase[..., None, None]
             sensitivity_maps = sensitivity_maps * images_phase[None, :, :]
 
+        #images_regridded = zero_padding(images_regridded, (256,256,256,2,1))
+        
         self.dc.init(
             images_regridded,
             kspace_trajectory,
@@ -204,16 +184,16 @@ class UnrolledNet(nn.Module):
             sensitivity_maps=sensitivity_maps,
         )
 
-        images = images_regridded.clone().detach()
+        image = images_regridded.clone().detach()
 
         for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
-            images = checkpoint(self.regularizer, images, use_reentrant=False)
-            images = checkpoint(self.dc, images, use_reentrant=False)
+            image = checkpoint(self.regularizer, image, use_reentrant=False)
+            image = checkpoint(self.dc, image, use_reentrant=False)
 
         if self.phase_normalization:
             images = images * images_phase[..., None, None]
 
-        return images
+        return image
 
 
 class SingleContrastUnrolledNet(nn.Module):

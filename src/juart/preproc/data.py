@@ -25,7 +25,6 @@ shared_dataset = None
 shared_kdata_buffer = None
 shared_sensmaps_buffer = None
 
-
 def get_shape(dataset):
     header = ismrmrd.xsd.CreateFromDocument(dataset.read_xml_header())
 
