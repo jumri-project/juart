@@ -3,7 +3,7 @@ import torch.nn as nn
 import sys
 sys.path.insert(0, "../../src")
 from juart.conopt.functional.__init__ import pad_tensor, crop_tensor
-from common import ComplexActivation, ConvLayer
+from .common import ConvLayer
 
 
 class DownConvBlock(nn.Module):

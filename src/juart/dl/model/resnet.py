@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
 from ..utils.validation import timing_layer, validation_layer
-from common import ComplexActivation, ConvLayer, DoubleConv
+from .common import ConvLayer, DoubleConv
 
 
 class ResNetBlocksModule(nn.Module):
@@ -18,7 +18,6 @@ class ResNetBlocksModule(nn.Module):
         num_of_resblocks=15,
         scale_factor=0,
         device=None,
-        ConvLayerCheckpoints = False,
         ResNetCheckpoints = False,
         dtype=torch.complex64,
     ):
@@ -59,7 +58,6 @@ class ResNetBlocksModule(nn.Module):
                     kernel_size,
                     activation=activation,
                     device=device,
-                    ConvLayerCheckpoints = ConvLayerCheckpoints,
                     dtype=dtype,
                 )
                 for _ in range(num_of_resblocks)
@@ -104,7 +102,6 @@ class ResNet(nn.Module):
         timing_level=0,
         validation_level=0,
         device=None,
-        ConvLayerCheckpoints: bool = False,
         ResNetCheckpoints = False,
         dtype=torch.complex64,
     ):
@@ -134,13 +131,13 @@ class ResNet(nn.Module):
         """
         super().__init__()
 
+        self.kernel_size = kernel_size
         self.layer1 = ConvLayer(
             contrasts,
-            contrasts,
+            features,
             kernel_size,
             activation="Identity",
             device=device,
-            ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
         )
 
@@ -150,8 +147,7 @@ class ResNet(nn.Module):
             activation=activation,
             num_of_resblocks=num_of_resblocks,
             device=device,
-            ConvLayerCheckpoints = ConvLayerCheckpoints,
-            ResNetCheckpoints = ResNetCheckpoints,
+            ResNetCheckpoints=ResNetCheckpoints,
             dtype=dtype,
         )
 
@@ -161,7 +157,6 @@ class ResNet(nn.Module):
             kernel_size,
             activation="Identity",
             device=device,
-            ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
         )
 
@@ -171,7 +166,6 @@ class ResNet(nn.Module):
             kernel_size,
             activation="Identity",
             device=device,
-            ConvLayerCheckpoints = ConvLayerCheckpoints,
             dtype=dtype,
         )
 
@@ -183,58 +177,14 @@ class ResNet(nn.Module):
     @validation_layer
     def forward(
         self,
-        images: torch.Tensor,  # shape: [nX,nY,nZ,nTI,nTE]
+        image: torch.Tensor,  # shape: [nX,nY,nZ,nTI,nTE]
     ) -> torch.Tensor:
-        images = images.to(self.device)
 
-        if len(kernel_size) == 2:
-            nTI, nTE = images.shape[-2:]
+        image = image.to(self.device)
 
-            images = images[
-                None, :, :, 0, :, :
-            ]  # switches shape to [blank, nX, nY, nTI, nTE]
-            images = torch.permute(
-                images, (0, 3, 4, 1, 2)
-            )  # switches shape to [blank, nTI, nTE, nX, nY]
-            images = torch.flatten(
-                images, start_dim=1, end_dim=2
-            )  # switches shape to [blank, nTI*nTE, nX, nY]
+        l1_out = self.layer1(image)
+        l2_out = self.layer2(l1_out)
+        l3_out = self.layer3(l2_out)
+        image = self.layer4(l3_out + l1_out)
 
-            l1_out = self.layer1(images)
-            l2_out = self.layer2(l1_out)
-            l3_out = self.layer3(l2_out)
-            images = self.layer4(l3_out + l1_out)
-
-            images = torch.unflatten(
-                images, 1, (nTI, nTE)
-            )  # switches shape to [blank, nTI, nTE, nX, nY]
-            images = torch.permute(
-                images, (0, 3, 4, 1, 2)
-            )  # switches shape to [blank, nX, nY, nTI, nTE]
-            images = images[
-                0, :, :, None, :, :
-            ]  # switches shape back to [nX, nY, nZ, nTI, nTE]
-
-        if len(kernel_size) == 3:
-            nTI, nTE = images.shape[-2:]
-
-            images = torch.permute(
-                images, (3, 4, 0, 1, 2)
-            )  # switches shape to [nTI, nTE, nX, nY, nZ]
-            images = torch.flatten(
-                images, start_dim=0, end_dim=1
-            )  # switches shape to [nTI * nTE, nX, nY, nZ]
-
-            images = self.layer1(images)
-            #l2_out = self.layer2(l1_out)
-            #l3_out = self.layer3(l2_out)
-            #images = self.layer4(l3_out + l1_out)
-
-            images = torch.unflatten(
-                images, 0, (nTI, nTE)
-            )  # switches shape to [nTI, nTE, nX, nY, nZ]
-            images = torch.permute(
-                images, (2, 3, 4, 0, 1)
-            )  # switches shape to [nX, nY, nZ, nTI, nTE]
-
-        return images
+        return image

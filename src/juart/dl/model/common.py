@@ -1,24 +1,26 @@
 import torch
 from torch import nn
 
+
 class ComplexActivation(nn.Module):
     def __init__(
         self,
-        activation: str = "ReLU",
+        activation
     ):
         super().__init__()
+        match activation:
 
-        if activation == "ELU":
-            self.functional = nn.functional.elu
+            case "ReLU":
+                self.functional = nn.ReLU()
 
-        elif activation == "LeakyReLU":
-            self.functional = nn.functional.leaky_relu
+            case "ELU":
+                self.functional = nn.ELU()
 
-        elif activation == "ReLU":
-            self.functional = nn.functional.relu
+            case "Identity":
+                self.functional = nn.Identity()
 
-        else:
-            raise ValueError(f"Unsupported activation_type: {activation}.")
+            case _:
+                raise ValueError(f'activation function {activation} is unknown.')
 
     def forward(
         self,
@@ -36,7 +38,7 @@ class ConvLayer(nn.Module):
         self,
         in_channels,
         out_channels,
-        kernel_size: Tuple[int] = (
+        kernel_size: tuple[int] = (
             3,
             3,
         ),
@@ -44,7 +46,6 @@ class ConvLayer(nn.Module):
         bias=False,
         activation="ReLU",
         device=None,
-        ConvLayerCheckpoints = False,
         dtype=torch.complex64,
     ):
         """
@@ -84,16 +85,14 @@ class ConvLayer(nn.Module):
         """
 
         super().__init__()
-        self.ConvLayerCheckpoints = ConvLayerCheckpoints
         self.dtype = dtype
-        
+
         if len(kernel_size) == 2:
             self.convlayer = nn.Conv2d(
                 in_channels,
                 out_channels,
                 kernel_size,
                 padding=padding,
-                activation=activation,
                 bias=bias,
                 device=device,
                 dtype=dtype,
@@ -105,45 +104,31 @@ class ConvLayer(nn.Module):
                 out_channels,
                 kernel_size,
                 padding=padding,
-                activation=activation,
                 bias=bias,
                 device=device,
                 dtype=dtype,
             )
-            
 
-    def forward(
-        self,
-        image):
+        self.activation = ComplexActivation(activation)
 
-        if self.ConvLayerCheckpoints:
-            image = checkpoint(self.CalcLayer, image, use_reentrant = False)
-
-        else:
-            image = image.to(dtype=self.dtype)
-            image = self.convlayer(image)
-
-        return image
-
-    def CalcLayer(self,image):
-
+    def forward(self, image):
         image = self.convlayer(image)
+        image = self.activation(image)
 
         return image
-
 
 
 class DoubleConv(nn.Module):
     def __init__(
         self,
         features: int,
-        kernel_size= tuple[int] = (3, 3),
+        kernel_size: tuple[int] = (3, 3),
         activation: list[str] = 'ReLU',
         padding: int = 1,
+        bias: bool = False,
         device: str = None,
         dtype=torch.complex64,
     ):
-
         """
         Initializes a DoubleConvolution Class and defines all its parameters used for convolution.
         Every ResNetBlock contains out of 2 convolutional Layers.
@@ -165,28 +150,32 @@ class DoubleConv(nn.Module):
         NOTE: This function is under development and may not be fully functional yet.
         """
 
-        if type(activation) == str:
+        if type(activation) is str:
             activation = [activation, activation]
 
         super().__init__()
+
+
         self.double_conv = nn.Sequential(
-            nn.Conv2d(
-                features,
-                features,
+            ConvLayer(
+                in_channels=features,
+                out_channels=features,
                 kernel_size=kernel_size,
                 padding=padding,
+                bias=bias,
                 activation=activation[0],
                 device=device,
-                dtype=dtype,
+                dtype=dtype
             ),
-            nn.Conv2d(
-                features,
-                features,
+            ConvLayer(
+                in_channels=features,
+                out_channels=features,
                 kernel_size=kernel_size,
                 padding=padding,
+                bias=bias,
                 activation=activation[1],
                 device=device,
-                dtype=dtype,
+                dtype=dtype
             )
         )
 

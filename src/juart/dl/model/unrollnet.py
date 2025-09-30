@@ -1,23 +1,14 @@
 import itertools
 from typing import Tuple
-import os
-
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 from torch.utils.checkpoint import checkpoint
 from tqdm import tqdm
-
 from ..utils.validation import timing_layer, validation_layer
 from .dc import DataConsistency
-from .resnet import ResNet
-from .unet import UNet
-
-import sys
-sys.path.insert(0, "../../src")
-from juart.preproc.data import zero_padding
-
+from .regularizer import Regularizer
 
 
 class ExponentialMovingAverageModel(AveragedModel):
@@ -67,7 +58,7 @@ class UnrolledNet(nn.Module):
         shape,
         CG_Iter=10,
         num_unroll_blocks=10,
-        num_res_blocks=15,
+        num_of_resblocks=15,
         features=128,
         activation="ReLU",
         lamda_start=0.05,
@@ -78,8 +69,7 @@ class UnrolledNet(nn.Module):
         kernel_size: Tuple[int] = (3, 3),
         regularizer="ResNet",
         device=None,
-        ConvLayerCheckpoints: bool = False,
-        ResNetCheckpoints: bool = False,
+        Checkpoints:bool = False,
         dtype=torch.complex64,
     ):
         """
@@ -124,30 +114,43 @@ class UnrolledNet(nn.Module):
         """
         super().__init__()
 
-        axes = ([n for n in range(1,len(kernel_size)+1,1)])
+        axes = ([n for n in range(1, len(kernel_size)+1, 1)])
         self.phase_normalization = phase_normalization
         self.num_unroll_blocks = num_unroll_blocks
         self.disable_progress_bar = disable_progress_bar
         self.timing_level = timing_level
         self.validation_level = validation_level
-        
+
         nX, nY, nZ, nTI, nTE = shape
         contrasts = nTI * nTE
 
         if type(device) == list:
-            
+
             if len(device) > 1:
                 dc_device = device[0]
                 resnet_device = device[1]
-                
+
             else:
                 dc_device = device[0]
                 resnet_device = device[0]
 
         else:
             dc_device = device
-            resnet_device = device
+            reg_device = device
 
+        self.regularizer = Regularizer(
+            shape,
+            regularizer=regularizer,
+            features=features,
+            activation=activation,
+            kernel_size=kernel_size,
+            num_of_resblocks=num_of_resblocks,
+            Checkpoints=Checkpoints,
+            timing_level=timing_level,
+            validation_level=validation_level,
+            device=reg_device,
+            dtype=dtype
+        )
 
         self.dc = DataConsistency(
             shape,
@@ -156,9 +159,9 @@ class UnrolledNet(nn.Module):
             timing_level=timing_level - 1,
             validation_level=validation_level - 1,
             axes=axes,
-            device=device,
+            device=dc_device,
             dtype=dtype,
-        ).to(device)
+        )
 
     @timing_layer
     @validation_layer
@@ -169,14 +172,12 @@ class UnrolledNet(nn.Module):
         kspace_mask: torch.Tensor = None,
         sensitivity_maps: torch.Tensor = None,
     ) -> torch.Tensor:
-        
+
         if self.phase_normalization:
             images_phase = torch.exp(1j * torch.angle(images_regridded[..., 0, 0]))
             images_regridded = images_regridded / images_phase[..., None, None]
             sensitivity_maps = sensitivity_maps * images_phase[None, :, :]
 
-        #images_regridded = zero_padding(images_regridded, (256,256,256,2,1))
-        
         self.dc.init(
             images_regridded,
             kspace_trajectory,
@@ -191,7 +192,7 @@ class UnrolledNet(nn.Module):
             image = checkpoint(self.dc, image, use_reentrant=False)
 
         if self.phase_normalization:
-            images = images * images_phase[..., None, None]
+            image = image * images_phase[..., None, None]
 
         return image
 

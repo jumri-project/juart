@@ -613,7 +613,6 @@ def pad_tensor(
         if the target shape is smaller than the input tensor shape in any dimension.
     """
     input_shape = tensor.shape
-
     # Ensure the input and target shapes have the same number of dimensions
     assert len(input_shape) == len(target_shape), (
         "Input and target shapes must have the same number of dimensions."

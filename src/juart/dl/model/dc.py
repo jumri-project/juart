@@ -101,7 +101,6 @@ class ToeplitzOperator(nn.Module):
 
         for sensitivity_maps_set in sensitivity_maps:
             v = images
-
             v = v * sensitivity_maps_set[..., None, None]
 
             v = apply_transfer_function(
@@ -185,10 +184,7 @@ class DataConsistency(nn.Module):
         self,
         images: torch.Tensor,
     ) -> torch.Tensor:
-        images = images.to(self.device)
 
-        print(self.images_regridded.shape, images.shape)
-        
         images = conj_grad(
             self.toep_ob,
             self.images_regridded + self.lam * images,
