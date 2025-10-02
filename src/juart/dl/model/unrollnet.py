@@ -59,11 +59,12 @@ class UnrolledNet(nn.Module):
         CG_Iter=10,
         num_unroll_blocks=10,
         num_of_resblocks=15,
-        features=128,
+        features=32,
         activation="ReLU",
         lamda_start=0.05,
         phase_normalization=False,
         disable_progress_bar=False,
+        pad_to: int = 0,
         timing_level=0,
         validation_level=0,
         kernel_size: Tuple[int] = (3, 3),
@@ -73,7 +74,8 @@ class UnrolledNet(nn.Module):
         dtype=torch.complex64,
     ):
         """
-        Initializes an UnrollNet as a neural Network with a number of ResNet Layers (ConvLayers) and a data consistency layer.
+        Initializes an UnrollNet as a neural Network existing out of a regularizer
+        and a data consistency layer.
 
         Parameters
         ----------
@@ -84,37 +86,47 @@ class UnrolledNet(nn.Module):
         num_unroll_blocks : int, optional
             Number of iterations in the loop of data consistency term and regularization
             term (default is 10).
-        num_res_blocks : int, optional
+        num_of_res_blocks : int, optional
             Number of ResNetBlocks that should be added to the second layer of the
             ResNet (default is 15).
         features : int, optional
             Number of the features of the neural network (default is 128).
-        weight_standardization : bool, optional
-            Activates the weight standardization that sets the mean of the weights to 0
-            and their deviation to 1(default is False).
-        spectral_normalization: bool, optional
-            Activates the spectral normalization (default is False).
+        activation: str, optional
+            defines the kind of activation function (default is "ReLu")
         phase_normalization: bool, optional
             normalizes the signals phase (default is False).
         disable_progress_bar: bool, optional
             Disable the progress bar output (default is False).
-        activation: str, optional
-            defines the kind of activation function (default is "ReLu")
         kernel_size: Tuple[int], optional
             changes the size of the kernel used in the convolutional layers and  its length
             decides whether all operations should be 2D or 3D. (default is (3,3))
+        regularizer: str, optional
+            decides which regularizer should be used. For now there are ResNet and UNet
+            (default is ResNet).
+        pad_to: int, optional
+            provides the ability to pad the input image to the shape (pad_to,pad_to,1) or
+            (pad_to,pad_to,pad_to) depending on the length of the kernel_size. Originally
+            used for the UNet and its dependency on the shape of 2^n. If pad_to = 0 and
+            UNet is used than the shape will be padded to the next 2^n shape.
+            (default is 0)
         device : str, optional
             Device on which to perform the computation
             (default is None, which uses the current device).
             It is also possible to give a list of strings. The first
             item is the DataConsistency device and the second one is
-            the device used for the resnet.
+            the device used for the regularizer.
+        Checkpoints: bool, optional
+            If true then checkpoints will be added in the regularizer, providing lower memory
+            usage to the cost of higher computing time (default is False).
 
         NOTE: This function is under development and may not be fully functional yet.
         """
         super().__init__()
 
         axes = ([n for n in range(1, len(kernel_size)+1, 1)])
+        self.pad_to = pad_to
+        self.net_structure = regularizer
+        self.kernel_size = kernel_size
         self.phase_normalization = phase_normalization
         self.num_unroll_blocks = num_unroll_blocks
         self.disable_progress_bar = disable_progress_bar
@@ -151,6 +163,17 @@ class UnrolledNet(nn.Module):
             device=reg_device,
             dtype=dtype
         )
+
+        if regularizer == "UNet":
+            corr = int(2**torch.ceil(torch.log2(torch.Tensor([shape[0]]))).item())
+            shape = (corr, corr, corr, shape[3], shape[4])
+
+            if pad_to != 0:
+                if len(kernel_size) == 2:
+                    shape = (pad_to,pad_to,shape[2],shape[3],shape[4])
+
+                elif len(kernel_size) == 3:
+                    shape = (pad_to,pad_to,pad_to,shape[3],shape[4])
 
         self.dc = DataConsistency(
             shape,

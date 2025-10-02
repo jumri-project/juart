@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
-import sys
-sys.path.insert(0, "../../src")
-from juart.conopt.functional.__init__ import pad_tensor, crop_tensor
-from .common import ConvLayer
+from .common import ConvLayer, ConvTransposeLayer, DoubleConv
 
 
 class DownConvBlock(nn.Module):
@@ -11,21 +8,48 @@ class DownConvBlock(nn.Module):
         self,
         in_channels,
         out_channels,
+        kernel_size: tuple[int] = (3, 3),
+        activation: str = "ReLU",
+        bias: bool = False,
         device=None,
         dtype=torch.complex64,
     ):
+        '''
+        Initializes a DownConvBlock which is used for the encoding of the unet.
+        (downward pass)
+
+        Parameter
+        ---------
+        in_channles : int
+            number of features in the input image (contrasts).
+        out_channels: int
+            number of features produced by the convolution.
+        kernel_size : Tuple[int], optional
+            forms the tuple that is used for the convolutions and defines
+            whether a 2D or 3D ConvLayer should be initialized.
+            dim = len(kernel_size); (default is (3,3)).
+        activation: str, optional
+            defines the kind of activation function (default is "ReLu")
+        device : torch.device, optional
+            Device on which to perform the computation
+            (default is None, which uses the current device).   
+        '''
         super().__init__()
-        self.down = nn.Conv2d(
+        self.down = ConvLayer(
             in_channels,
             out_channels,
-            kernel_size=2,
+            kernel_size=kernel_size,
             stride=2,
+            bias=bias,
             device=device,
             dtype=dtype,
         )
         self.conv = DoubleConv(
             out_channels,
             out_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            activation=activation,
             device=device,
             dtype=dtype,
         )
@@ -44,21 +68,46 @@ class UpConvBlock(nn.Module):
         self,
         in_channels,
         out_channels,
+        kernel_size: tuple[int] = (2, 2),
+        activation: str = "ReLU",
         device=None,
         dtype=torch.complex64,
     ):
+        '''
+        Initializes an UpConvBlock which is used for the decoding of the unet.
+        (upward pass)
+
+        Parameter
+        ---------
+        in_channles : int
+            number of features in the input image (contrasts).
+        out_channels: int
+            number of features produced by the convolution.
+        kernel_size : Tuple[int], optional
+            forms the tuple that is used for the convolutions and defines
+            whether a 2D or 3D ConvLayer should be initialized.
+            dim = len(kernel_size); (default is (3,3)).
+        activation: str, optional
+            defines the kind of activation function (default is "ReLu")
+        device : torch.device, optional
+            Device on which to perform the computation
+            (default is None, which uses the current device).        
+        '''
         super().__init__()
-        self.up = nn.ConvTranspose2d(
+        self.up = ConvTransposeLayer(
             in_channels,
             out_channels,
-            kernel_size=2,
+            kernel_size=(4, 4, 4),
             stride=2,
             device=device,
             dtype=dtype,
         )
         self.conv = DoubleConv(
-            out_channels * 2,
+            2 * out_channels,
             out_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            activation=activation,
             device=device,
             dtype=dtype,
         )  # *2 for skip connection
@@ -68,7 +117,7 @@ class UpConvBlock(nn.Module):
         images,
         skip,
     ):
-        images = self.up(images)
+        images = self.up(images, images.shape[0]*2)
         images = torch.cat([images, skip], dim=1)  # Concatenate skip connection
         images = self.conv(images)
 
@@ -79,24 +128,46 @@ class UNet(nn.Module):
     def __init__(
         self,
         contrasts: int = 1,
-        features: list[int] = [64, 128, 256, 512],
-        kernel_size: tuple[int] = (3,3),
+        features: list[int] = [16,32,64],
+        kernel_size: tuple[int] = (3, 3),
+        activation: str = 'ReLU',
         device: str = None,
         dtype=torch.complex64,
     ):
+        '''
+        Initializes a UNet as regularizer.
+
+        Parameter
+        ---------
+        contrasts: int, optional
+            defines the number of contrasts which the UNet should take into account
+            (default is 1).
+        features: list[int], optional
+            defines the number of layers in the unet and their number of features.
+            (default is [16,32,64]).
+        kernel_size: Tuple[int], optional
+            changes the size of the kernel used in the convolutional layers and  its length
+            decides whether all operations should be 2D or 3D. (default is (3,3))
+        activation: str, optional
+            defines the kind of activation function (default is "ReLu")
+        device : torch.device, optional
+            Device on which to perform the computation
+            (default is None, which uses the current device).
+        '''
         super().__init__()
 
-        self.kernel = kernel
+        self.kernel_size = kernel_size
         self.device = device
         self.dtype = dtype
         self.encoder = nn.ModuleList()
         self.decoder = nn.ModuleList()
 
         # Initial Conv
-        self.init_conv = nn.Conv2d(
+        self.init_conv = ConvLayer(
             contrasts,
             features[0],
             kernel_size=kernel_size,
+            activation=activation,
             device=device,
             dtype=dtype,
         )
@@ -107,7 +178,9 @@ class UNet(nn.Module):
                 DoubleConv(
                     features[i],
                     features[i],
-                    kernel_size = kernel_size,
+                    features[i],
+                    kernel_size=kernel_size,
+                    activation=activation,
                     device=device,
                     dtype=dtype,
                 ),
@@ -120,6 +193,8 @@ class UNet(nn.Module):
                 DownConvBlock(
                     features[i],
                     features[i+1],
+                    activation=activation,
+                    kernel_size=kernel_size,
                     device=device,
                     dtype=dtype,
                 ),
@@ -129,7 +204,9 @@ class UNet(nn.Module):
         self.bottleneck = DoubleConv(
             features[-1],
             features[-1],
-            kernel_size = kernel_size,
+            features[-1],
+            activation=activation,
+            kernel_size=kernel_size,
             device=device,
             dtype=dtype,
         )
@@ -140,16 +217,19 @@ class UNet(nn.Module):
                 UpConvBlock(
                     features[i],
                     features[i-1],
+                    kernel_size=kernel_size,
+                    activation=activation,
                     device=device,
                     dtype=dtype,
                 ),
             )
 
         # Final Conv
-        self.final_conv = nn.Conv2d(
+        self.final_conv = ConvLayer(
             features[0],
             contrasts,
-            kernel_size = kernel_size,
+            kernel_size=kernel_size,
+            activation=activation,
             device=device,
             dtype=dtype,
         )
@@ -159,100 +239,72 @@ class UNet(nn.Module):
         images,
     ):
 
-        if len(self.kernel) == 2:
-            nTI, nTE = images.shape[-2:]
-    
-            images = images[
-                None, :, :, 0, :, :
-            ]  # switches shape to [blank, nX, nY, nTI, nTE]
-            images = torch.permute(
-                images, (0, 3, 4, 1, 2)
-            )  # switches shape to [blank, nTI, nTE, nX, nY]
-            images = torch.flatten(
-                images, start_dim=1, end_dim=2
-            )  # switches shape to [blank, nTI*nTE, nX, nY]
-    
-            # ---
-    
-            skips = []
-    
-            # Initial Conv
-            images = self.init_conv(images)
-    
-            # Encoder
-            for i, layer in enumerate(self.encoder):
-                images = layer(images)
-                if i < len(self.encoder) - 1:  # Skip the last layer (bottleneck input)
-                    skips.append(images)
-                    images = self.down_convs[i](images)  # Down Conv for downsampling
-    
-            # Bottleneck
-            images = self.bottleneck(images)
-    
-            # Decoder
-            skips = skips[::-1]  # Reverse for upsampling
-            for i, layer in enumerate(self.decoder):
-                images = layer(images, skips[i])
-    
-            # Final Conv
-            images = self.final_conv(images)
-    
-            # ---
-    
-            images = torch.unflatten(
-                images, 1, (nTI, nTE)
-            )  # switches shape to [blank, nTI, nTE, nX, nY]
-            images = torch.permute(
-                images, (0, 3, 4, 1, 2)
-            )  # switches shape to [blank, nX, nY, nTI, nTE]
-            images = images[
-                0, :, :, None, :, :
-            ]  # switches shape back to [nX, nY, nZ, nTI, nTE]
+        skips = []
 
+        # Initial Conv
+        images = self.init_conv(images)
 
-        elif len(self.kernel) == 3:
-            
+        # Encoder
+        for i, layer in enumerate(self.encoder):
+            images = layer(images)
+            if i < len(self.encoder) - 1:  # Skip the last layer (bottleneck input)
+                skips.append(images)
+                images = self.down_convs[i](images)  # Down Conv for downsampling
+
+        # Bottleneck
+        images = self.bottleneck(images)
+
+        # Decoder
+        skips = skips[::-1]  # Reverse for upsampling
+        for i, layer in enumerate(self.decoder):
+            images = layer(images, skips[i])
+
+        # Final Conv
+        images = self.final_conv(images)
+
+        if len(self.kernel_size) == 12:
+
             nTI, nTE = images.shape[-2:]
-    
+
             images = torch.permute(
                 images, (3, 4, 0, 1, 2)
             )  # switches shape to [nTI, nTE, nX, nY, nZ]
             images = torch.flatten(
                 images, start_dim=0, end_dim=1
             )  # switches shape to [nTI*nTE, nX, nY, nZ]
-    
+
             # ---
-    
+
             skips = []
-    
+
             # Initial Conv
             images = self.init_conv(images)
-    
+
             # Encoder
             for i, layer in enumerate(self.encoder):
                 images = layer(images)
                 if i < len(self.encoder) - 1:  # Skip the last layer (bottleneck input)
                     skips.append(images)
                     images = self.down_convs[i](images)  # Down Conv for downsampling
-    
+
             # Bottleneck
             images = self.bottleneck(images)
-    
+
             # Decoder
             skips = skips[::-1]  # Reverse for upsampling
             for i, layer in enumerate(self.decoder):
                 images = layer(images, skips[i])
-    
+
             # Final Conv
             images = self.final_conv(images)
-    
+
             # ---
-    
+
             images = torch.unflatten(
                 images, 1, (nTI, nTE)
             )  # switches shape to [nTI, nTE, nX, nY, nZ]
             images = torch.permute(
                 images, (2, 3, 4, 0, 1)
             )  # switches shape to [nX, nY, nZ, nTI, nTE]
-        
+
         return images

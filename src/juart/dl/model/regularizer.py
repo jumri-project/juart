@@ -14,7 +14,7 @@ class Regularizer(nn.Module):
         self,
         shape: tuple[int],
         regularizer: str = "ResNet",
-        features: list = [32],
+        features: list = 32,
         activation: str = "ReLU",
         kernel_size: tuple[int] = (3, 3),
         num_of_resblocks: int = 10,
@@ -24,6 +24,38 @@ class Regularizer(nn.Module):
         device: str = None,
         dtype=torch.complex64
     ):
+        '''
+        Initializes a Regularizer. For now it is possible to initialize a ResNet and a UNet.
+
+        Parameters
+        ----------
+        shape : torch.Tensor, shape (nX, nY, nZ, nTI, nTE)
+            Shape of the image data.
+        features : int, optional
+            Number of the features of the neural network (default is 128).
+        regularizer: str, optional
+            decides which regularizer should be used. For now there are ResNet and UNet
+            (default is ResNet).
+        activation: str, optional
+            defines the kind of activation function (default is "ReLu")
+        kernel_size: Tuple[int], optional
+            changes the size of the kernel used in the convolutional layers and  its length
+            decides whether all operations should be 2D or 3D. (default is (3,3))
+        num_of_res_blocks : int, optional
+            Number of ResNetBlocks that should be added to the second layer of the
+            ResNet (default is 10).
+        Checkpoints: bool, optional
+            If true then checkpoints will be added in the regularizer, providing lower memory
+            usage to the cost of higher computing time (default is False).
+        device : str, optional
+            Device on which to perform the computation
+            (default is None, which uses the current device).
+            It is also possible to give a list of strings. The first
+            item is the DataConsistency device and the second one is
+            the device used for the regularizer.
+
+        NOTE: This function is under development and may not be fully functional yet.
+        '''
 
         _, _, _, nTI, nTE = shape
         contrasts = nTI*nTE
@@ -51,6 +83,8 @@ class Regularizer(nn.Module):
             self.regularizer = UNet(
                 contrasts=contrasts,
                 features=features,
+                kernel_size=kernel_size,
+                activation=activation,
                 device=device,
                 dtype=dtype,
             )

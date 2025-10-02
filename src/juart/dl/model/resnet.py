@@ -23,29 +23,25 @@ class ResNetBlocksModule(nn.Module):
     ):
         """
         Initializes a ResNetBlocksModule class that calls a variable number of
-        ResNetBlocks and can let them calculate in its forward pass.
+        DoubleConvs and can let them calculate in its forward pass.
 
         Parameters
         ----------
         features : int
-            number of the features of the ResNet. The more features it has the more
-            things it can learn.
+            number of in and output features of the convolutions.
         kernel_size : Tuple[int], optional
-            forms the tuple that is used for the convolutions (X, Y, Z)
-            (default is (3,3)).
-        activation: str, optional
-            defines the kind of activation function (default is "ReLu")
+            forms the tuple that is used for the convolutions and defines
+            whether a 2D or 3D ConvLayer should be initialized.
+            dim = len(kernel_size); (default is (3,3)).
         num_of_resblocks : int, optional
-            number of ResNetBlocks that should be initialized. Everyone of them
-            containing 2 ConvLayers (default is 15).
+            number of DoubleConvs that should be initialized (default is 15).
         scale_factor: float, optional
             defines the impact of the ResNetBlocks on the image (default is 0.1)
-        kernel_size: Tuple[int], optional
-            changes the size of the kernel used in the convolutional layers
-            (default is (3,3))
+        activation: str, optional
+            defines the kind of activation function (default is "ReLu")
         device : torch.device, optional
             Device on which to perform the computation
-            (default is None, which uses the current device).
+            (default is None, which uses the current device).   
 
         NOTE: This function is under development and may not be fully functional yet.
         """
@@ -54,6 +50,8 @@ class ResNetBlocksModule(nn.Module):
         self.layers = nn.ModuleList(
             [
                 DoubleConv(
+                    features,
+                    features,
                     features,
                     kernel_size,
                     activation=activation,
@@ -95,7 +93,7 @@ class ResNet(nn.Module):
     def __init__(
         self,
         contrasts=1,
-        features=128,
+        features=32,
         num_of_resblocks=15,
         kernel_size: Tuple[int] = (3, 3),
         activation="ReLU",
@@ -106,7 +104,7 @@ class ResNet(nn.Module):
         dtype=torch.complex64,
     ):
         """
-        Initializes a ResNet class with a variable number of resblocks and ConvLayers.
+        Initializes a ResNet class with a variable number of DoubleConvs.
 
         Parameters
         ----------
@@ -114,18 +112,18 @@ class ResNet(nn.Module):
             number of contrasts that should be respected (default is 1).
         features : int, optional
             number of the features of the ResNet. The more features it has the more
-            things it can learn (default is 128).
+            things it can learn (default is 32).
         num_of_resblocks : int, optional
-            number of ResNetBlocks that should be initialized. Everyone of them
-            containing 2 ConvLayers (default is 15).
+            number of DoubleConvs that should be initialized (default is 15).
         kernel_size : Tuple[int], optional
-            forms the tuple that is used for the convolutions (X, Y, Z)
-            (default is (3,3)).
+            forms the tuple that is used for the convolutions and defines
+            whether a 2D or 3D ConvLayer should be initialized.
+            dim = len(kernel_size); (default is (3,3)).
         activation: str, optional
             defines the kind of activation function (default is "ReLu")
         device : torch.device, optional
             Device on which to perform the computation
-            (default is None, which uses the current device).
+            (default is None, which uses the current device).  
 
         NOTE: This function is under development and may not be fully functional yet.
         """
