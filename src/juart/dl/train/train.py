@@ -80,7 +80,7 @@ def train_loop_per_worker(options):
 
     nD = len(options["datasets"])
     nS = len(options["slices"])
-    nX, nY, nZ, nTI, nTE = options["shape"]
+    shape = tuple(options["shape"])
 
     num_epochs = options["epochs"]
 
@@ -133,7 +133,6 @@ def train_loop_per_worker(options):
             device=device,
         )
     loss_fn = JointLoss(
-        shape,
         (3, 3),
         weights_kspace_loss=options["weight_kspace_loss"],
         weights_ispace_loss=options["weight_ispace_loss"],
