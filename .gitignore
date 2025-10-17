@@ -11,3 +11,5 @@
 LocalData/
 qrage/
 parameter-estimation/
+notebooks/gre_noDI/
+notebooks/gre_DI/
