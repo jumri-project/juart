@@ -226,17 +226,18 @@ class SingleContrastUnrolledNet(nn.Module):
         shape,
         CG_Iter=10,
         num_unroll_blocks=10,
-        num_res_blocks=15,
+        num_of_resblocks=15,
         contrasts=1,
         features=32,
-        weight_standardization=False,
-        spectral_normalization=False,
         activation="ReLU",
         lamda_start=0.05,
         phase_normalization=False,
         disable_progress_bar=False,
+        pad_to: int = 0,
         timing_level=0,
         validation_level=0,
+        kernel_size: Tuple[int] = (3, 3),
+        regularizer="ResNet",
         device=None,
         dtype=torch.complex64,
     ):
@@ -251,22 +252,25 @@ class SingleContrastUnrolledNet(nn.Module):
                     (nX, nY, nZ, 1, 1),
                     CG_Iter=CG_Iter,
                     num_unroll_blocks=num_unroll_blocks,
-                    num_res_blocks=num_res_blocks,
+                    num_of_resblocks=num_of_resblocks,
                     features=features,
-                    weight_standardization=weight_standardization,
-                    spectral_normalization=spectral_normalization,
                     activation=activation,
                     lamda_start=lamda_start,
                     phase_normalization=phase_normalization,
                     disable_progress_bar=True,
                     timing_level=timing_level - 1,
                     validation_level=validation_level - 1,
+                    kernel_size=kernel_size,
+                    regularizer=regularizer,
                     device=device,
                     dtype=dtype,
                 )
                 for _ in range(contrasts)
             ]
         )
+
+        self.pad_to = pad_to
+        self.net_structure = regularizer
 
         self.disable_progress_bar = disable_progress_bar
         self.timing_level = timing_level
