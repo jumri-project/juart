@@ -1,11 +1,13 @@
 import itertools
 from typing import Tuple
+
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 from torch.utils.checkpoint import checkpoint
 from tqdm import tqdm
+
 from ..utils.validation import timing_layer, validation_layer
 from .dc import DataConsistency
 from .regularizer import Regularizer
@@ -70,7 +72,7 @@ class UnrolledNet(nn.Module):
         kernel_size: Tuple[int] = (3, 3),
         regularizer="ResNet",
         device=None,
-        Checkpoints:bool = False,
+        Checkpoints: bool = False,
         dtype=torch.complex64,
     ):
         """
@@ -123,7 +125,7 @@ class UnrolledNet(nn.Module):
         """
         super().__init__()
 
-        axes = ([n for n in range(1, len(kernel_size)+1, 1)])
+        axes = [n for n in range(1, len(kernel_size) + 1, 1)]
         self.pad_to = pad_to
         self.net_structure = regularizer
         self.kernel_size = kernel_size
@@ -137,7 +139,6 @@ class UnrolledNet(nn.Module):
         contrasts = nTI * nTE
 
         if type(device) == list:
-
             if len(device) > 1:
                 dc_device = device[0]
                 resnet_device = device[1]
@@ -161,19 +162,19 @@ class UnrolledNet(nn.Module):
             timing_level=timing_level,
             validation_level=validation_level,
             device=reg_device,
-            dtype=dtype
+            dtype=dtype,
         )
 
         if regularizer == "UNet":
-            corr = int(2**torch.ceil(torch.log2(torch.Tensor([shape[0]]))).item())
+            corr = int(2 ** torch.ceil(torch.log2(torch.Tensor([shape[0]]))).item())
             shape = (corr, corr, corr, shape[3], shape[4])
 
             if pad_to != 0:
                 if len(kernel_size) == 2:
-                    shape = (pad_to,pad_to,shape[2],shape[3],shape[4])
+                    shape = (pad_to, pad_to, shape[2], shape[3], shape[4])
 
                 elif len(kernel_size) == 3:
-                    shape = (pad_to,pad_to,pad_to,shape[3],shape[4])
+                    shape = (pad_to, pad_to, pad_to, shape[3], shape[4])
 
         self.dc = DataConsistency(
             shape,
@@ -195,7 +196,6 @@ class UnrolledNet(nn.Module):
         kspace_mask: torch.Tensor = None,
         sensitivity_maps: torch.Tensor = None,
     ) -> torch.Tensor:
-
         if self.phase_normalization:
             images_phase = torch.exp(1j * torch.angle(images_regridded[..., 0, 0]))
             images_regridded = images_regridded / images_phase[..., None, None]

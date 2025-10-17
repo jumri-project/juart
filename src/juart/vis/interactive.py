@@ -1,18 +1,19 @@
 import matplotlib.pyplot as plt
-from ipywidgets import interactive, widgets
 import numpy as np
+from ipywidgets import interactive, widgets
+
 
 class InteractiveMultiPlotter3D:
     def __init__(
         self,
         data: list,
-        layout: list = [1,1],
+        layout: list = [1, 1],
         vmin: int = None,
         vmax: int = None,
         title: list = None,
         cmap: str = "gray",
         description: str = "Dimension 3:",
-        activate_colorbar: bool = True
+        activate_colorbar: bool = True,
     ):
         self.data = data
         self.vmin = vmin
@@ -25,16 +26,18 @@ class InteractiveMultiPlotter3D:
             self.fig, self.ax = plt.subplots(1, len(data))
 
         if layout[0] * layout[1] >= len(data):
-            self.fig, self.ax = plt.subplots(2,3)
+            self.fig, self.ax = plt.subplots(2, 3)
 
         if type(self.ax) is np.ndarray:
-
             ims = list()
 
             if type(self.ax[0]) != np.ndarray:
                 for i, ax in enumerate(self.ax):
                     ax.imshow = self.ax[i].imshow(
-                        self.data[i][:, :, 0], vmin=self.vmin, vmax=self.vmax, cmap=self.cmap
+                        self.data[i][:, :, 0],
+                        vmin=self.vmin,
+                        vmax=self.vmax,
+                        cmap=self.cmap,
                     )
                     ax.set_title(self.title[i])
                     ims.append(ax.imshow)
@@ -42,12 +45,14 @@ class InteractiveMultiPlotter3D:
             else:
                 i = 0
                 rows, cols = layout
-                for row in range(0,rows,1):
-
+                for row in range(0, rows, 1):
                     for col, ax in enumerate(self.ax[row]):
                         if len(data) > i:
                             ax.imshow = self.ax[row][col].imshow(
-                                self.data[i][:, :, 0], vmin=self.vmin, vmax=self.vmax, cmap=self.cmap
+                                self.data[i][:, :, 0],
+                                vmin=self.vmin,
+                                vmax=self.vmax,
+                                cmap=self.cmap,
                             )
                             ax.set_title(self.title[i])
                             ims.append(ax.imshow)
@@ -55,7 +60,9 @@ class InteractiveMultiPlotter3D:
                         i += 1
 
             if activate_colorbar:
-                self.fig.colorbar(ims[-1], ax=self.ax.ravel().tolist(), location="right")
+                self.fig.colorbar(
+                    ims[-1], ax=self.ax.ravel().tolist(), location="right"
+                )
 
         else:
             self.ax.imshow = plt.imshow(
@@ -77,7 +84,6 @@ class InteractiveMultiPlotter3D:
         )
 
     def show(self, z):
-
         if type(self.ax) is np.ndarray:
             if type(self.ax[0]) is not np.ndarray:
                 for i, ax in enumerate(self.ax):
@@ -100,6 +106,7 @@ class InteractiveMultiPlotter3D:
             self.ax.imshow.set_data(self.data[0][:, :, z - 1])
             self.fig.canvas.flush_events()
 
+
 class InteractiveFigure3D:
     def __init__(
         self,
@@ -112,7 +119,6 @@ class InteractiveFigure3D:
         cmap=None,
         description="Dimension 3",
     ):
-
         self.img = data.transpose(axes)
         self.vmin = vmin
         self.vmax = vmax
@@ -123,11 +129,11 @@ class InteractiveFigure3D:
 
         self.fig = plt.figure(figure, figsize=(3, 3))
         plt.title(self.title)
-        #self.ax = self.fig.add_subplot(1, 1, 1)
+        # self.ax = self.fig.add_subplot(1, 1, 1)
         self.imshow = plt.imshow(
             self.img[:, :, 0], vmin=self.vmin, vmax=self.vmax, cmap=cmap
         )
-        #self.ax.axis("off")
+        # self.ax.axis("off")
         self.fig.colorbar(self.imshow)
 
         self.interactive = interactive(

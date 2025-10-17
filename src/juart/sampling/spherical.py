@@ -6,7 +6,6 @@ def spherical_trajectory_3d(
     projections,
     readoutDownsampling: bool = True,
 ):
-
     phi_1 = 0.4656
     phi_2 = 0.6823
 

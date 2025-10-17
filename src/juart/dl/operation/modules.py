@@ -1,11 +1,10 @@
-import torch
 
-from torch import distributed as dist
-from ..utils.dist import gather_and_average_losses
+import torch
 import torch.profiler
-import sys
-sys.path.insert(0, "../../src")
-from juart.conopt.functional.__init__ import pad_tensor, crop_tensor
+from torch import distributed as dist
+
+from ...conopt.functional import crop_tensor, pad_tensor
+from ..utils.dist import gather_and_average_losses
 
 
 def training(
@@ -40,31 +39,65 @@ def training(
             dist.barrier()
 
             if model.net_structure == "UNet":
-                corr = int(2**torch.ceil(torch.log2(torch.Tensor([images_regridded.shape[0]]))).item())
-                images_regridded = pad_tensor(images_regridded,
-                                              (corr,
-                                               corr,
-                                               corr,
-                                               images_regridded.shape[3],
-                                               images_regridded.shape[4])
-                                             )
+                corr = int(
+                    2
+                    ** torch.ceil(
+                        torch.log2(torch.Tensor([images_regridded.shape[0]]))
+                    ).item()
+                )
+                images_regridded = pad_tensor(
+                    images_regridded,
+                    (
+                        corr,
+                        corr,
+                        corr,
+                        images_regridded.shape[3],
+                        images_regridded.shape[4],
+                    ),
+                )
 
-                sensitivity_maps = pad_tensor(sensitivity_maps,
-                                              (sensitivity_maps.shape[0],
-                                               corr,
-                                               corr,
-                                               corr)
-                                             )
+                sensitivity_maps = pad_tensor(
+                    sensitivity_maps, (sensitivity_maps.shape[0], corr, corr, corr)
+                )
 
                 if model.pad_to != 0:
                     pad_to = model.pad_to
                     if len(model.kernel_size) == 2:
-                        images_regridded = crop_tensor(images_regridded,(pad_to,pad_to,images_regridded.shape[2],images_regridded.shape[3],images_regridded.shape[4]))
-                        sensitivity_maps = crop_tensor(sensitivity_maps,(sensitivity_maps.shape[0],pad_to,pad_to,images_regridded.shape[2]))
+                        images_regridded = crop_tensor(
+                            images_regridded,
+                            (
+                                pad_to,
+                                pad_to,
+                                images_regridded.shape[2],
+                                images_regridded.shape[3],
+                                images_regridded.shape[4],
+                            ),
+                        )
+                        sensitivity_maps = crop_tensor(
+                            sensitivity_maps,
+                            (
+                                sensitivity_maps.shape[0],
+                                pad_to,
+                                pad_to,
+                                images_regridded.shape[2],
+                            ),
+                        )
 
                     elif len(model.kernel_size) == 3:
-                        images_regridded = crop_tensor(images_regridded,(pad_to,pad_to,pad_to,images_regridded.shape[3],images_regridded.shape[4]))
-                        sensitivity_maps = crop_tensor(sensitivity_maps,(sensitivity_maps.shape[0],pad_to,pad_to,pad_to))
+                        images_regridded = crop_tensor(
+                            images_regridded,
+                            (
+                                pad_to,
+                                pad_to,
+                                pad_to,
+                                images_regridded.shape[3],
+                                images_regridded.shape[4],
+                            ),
+                        )
+                        sensitivity_maps = crop_tensor(
+                            sensitivity_maps,
+                            (sensitivity_maps.shape[0], pad_to, pad_to, pad_to),
+                        )
 
             images_reconstructed = model(
                 images_regridded,
@@ -73,7 +106,9 @@ def training(
                 sensitivity_maps=sensitivity_maps,
             )
 
-            print(f"Rank {dist.get_rank()} - model initialization done -> loss fn initialization")
+            print(
+                f"Rank {dist.get_rank()} - model initialization done -> loss fn initialization"
+            )
             dist.barrier()
             # Loss
             loss = loss_fn(
@@ -83,13 +118,17 @@ def training(
                 kspace_data,
                 kspace_mask_target,
                 sensitivity_maps,
-            )  
-            print(f"Rank {dist.get_rank()} - loss fn initialization done -> compute backward pass")
-            dist.barrier() 
+            )
+            print(
+                f"Rank {dist.get_rank()} - loss fn initialization done -> compute backward pass"
+            )
+            dist.barrier()
             # Backpropagation
-            loss.backward()  
-            print(f"Rank {dist.get_rank()} - compute backward pass done -> compute accumulator")
-            dist.barrier() 
+            loss.backward()
+            print(
+                f"Rank {dist.get_rank()} - compute backward pass done -> compute accumulator"
+            )
+            dist.barrier()
             # Accumulate gradients
             accumulator.accumulate()
 
@@ -105,8 +144,9 @@ def training(
             torch.tensor(losses), group=group, device=device
         )
 
-    #return averaged_losses.tolist(), images_reconstructed
+    # return averaged_losses.tolist(), images_reconstructed
     return averaged_losses
+
 
 def validation(
     indices,
@@ -171,31 +211,65 @@ def inference(
         sensitivity_maps = data["sensitivity_maps"].to(device)
 
         if model.module.net_structure == "UNet":
-            corr = int(2**torch.ceil(torch.log2(torch.Tensor([images_regridded.shape[0]]))).item())
-            images_regridded = pad_tensor(images_regridded,
-                                          (corr,
-                                           corr,
-                                           corr,
-                                           images_regridded.shape[3],
-                                           images_regridded.shape[4])
-                                         )
+            corr = int(
+                2
+                ** torch.ceil(
+                    torch.log2(torch.Tensor([images_regridded.shape[0]]))
+                ).item()
+            )
+            images_regridded = pad_tensor(
+                images_regridded,
+                (
+                    corr,
+                    corr,
+                    corr,
+                    images_regridded.shape[3],
+                    images_regridded.shape[4],
+                ),
+            )
 
-            sensitivity_maps = pad_tensor(sensitivity_maps,
-                                          (sensitivity_maps.shape[0],
-                                           corr,
-                                           corr,
-                                           corr)
-                                         )
+            sensitivity_maps = pad_tensor(
+                sensitivity_maps, (sensitivity_maps.shape[0], corr, corr, corr)
+            )
 
             if model.module.pad_to != 0:
                 pad_to = model.module.pad_to
                 if len(model.module.kernel_size) == 2:
-                    images_regridded = crop_tensor(images_regridded,(pad_to,pad_to,images_regridded.shape[2],images_regridded.shape[3],images_regridded.shape[4]))
-                    sensitivity_maps = crop_tensor(sensitivity_maps,(sensitivity_maps.shape[0],pad_to,pad_to,images_regridded.shape[2]))
+                    images_regridded = crop_tensor(
+                        images_regridded,
+                        (
+                            pad_to,
+                            pad_to,
+                            images_regridded.shape[2],
+                            images_regridded.shape[3],
+                            images_regridded.shape[4],
+                        ),
+                    )
+                    sensitivity_maps = crop_tensor(
+                        sensitivity_maps,
+                        (
+                            sensitivity_maps.shape[0],
+                            pad_to,
+                            pad_to,
+                            images_regridded.shape[2],
+                        ),
+                    )
 
                 elif len(model.module.kernel_size) == 3:
-                    images_regridded = crop_tensor(images_regridded,(pad_to,pad_to,pad_to,images_regridded.shape[3],images_regridded.shape[4]))
-                    sensitivity_maps = crop_tensor(sensitivity_maps,(sensitivity_maps.shape[0],pad_to,pad_to,pad_to))
+                    images_regridded = crop_tensor(
+                        images_regridded,
+                        (
+                            pad_to,
+                            pad_to,
+                            pad_to,
+                            images_regridded.shape[3],
+                            images_regridded.shape[4],
+                        ),
+                    )
+                    sensitivity_maps = crop_tensor(
+                        sensitivity_maps,
+                        (sensitivity_maps.shape[0], pad_to, pad_to, pad_to),
+                    )
 
         # Forward path
         images_reconstructed = model(

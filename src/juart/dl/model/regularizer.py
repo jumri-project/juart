@@ -1,10 +1,7 @@
 import torch
 from torch import nn
-from torch.utils.checkpoint import checkpoint
-from tqdm import tqdm
 
 from ..utils.validation import timing_layer, validation_layer
-
 from .resnet import ResNet
 from .unet import UNet
 
@@ -22,9 +19,9 @@ class Regularizer(nn.Module):
         timing_level: int = 0,
         validation_level: int = 0,
         device: str = None,
-        dtype=torch.complex64
+        dtype=torch.complex64,
     ):
-        '''
+        """
         Initializes a Regularizer. For now it is possible to initialize a ResNet and a UNet.
 
         Parameters
@@ -55,10 +52,10 @@ class Regularizer(nn.Module):
             the device used for the regularizer.
 
         NOTE: This function is under development and may not be fully functional yet.
-        '''
+        """
 
         _, _, _, nTI, nTE = shape
-        contrasts = nTI*nTE
+        contrasts = nTI * nTE
         super().__init__()
 
         self.timing_level = timing_level
@@ -95,7 +92,6 @@ class Regularizer(nn.Module):
         self,
         images_regridded: torch.Tensor,
     ) -> torch.Tensor:
-
         image = images_regridded.clone().detach()
 
         nTI, nTE = image.shape[-2:]
@@ -109,7 +105,9 @@ class Regularizer(nn.Module):
                 image = image[:, :, :, :, 0]  # [blank,nTI*nTE,nX,nY]
 
             else:
-                raise ValueError('z-dimension will be killed when using a 2D kernel on a 3D dataset')
+                raise ValueError(
+                    "z-dimension will be killed when using a 2D kernel on a 3D dataset"
+                )
 
         image = self.regularizer(image)
 
@@ -117,7 +115,9 @@ class Regularizer(nn.Module):
             image = image[:, :, :, :, None]  # [blank,nTI*nTE,nX,nY,nZ]
 
         image = image[0, :, :, :, :]
-        image = image.unflatten(0, (nTI, nTE))  # switches shape to [blank,nTI,nTE,nX,nY,nZ]
+        image = image.unflatten(
+            0, (nTI, nTE)
+        )  # switches shape to [blank,nTI,nTE,nX,nY,nZ]
         image = image.permute((2, 3, 4, 0, 1))  # switches shape to [nX,nY,nZ,nTI,nTE]
 
         return image

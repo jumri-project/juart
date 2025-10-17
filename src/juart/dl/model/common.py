@@ -3,11 +3,8 @@ from torch import nn
 
 
 class ComplexActivation(nn.Module):
-    def __init__(
-        self,
-        activation
-    ):
-        '''
+    def __init__(self, activation):
+        """
         Initializes a complex activation function. Its necessary because
         the original torch activation functions cant handle complex values.
 
@@ -16,10 +13,9 @@ class ComplexActivation(nn.Module):
         activation: str
             Defines which activation function should be initialized.
             Currently supported: ReLU, ELU, Identity (default is ReLU)
-        '''
+        """
         super().__init__()
         match activation:
-
             case "ReLU":
                 self.functional = nn.ReLU()
 
@@ -30,7 +26,7 @@ class ComplexActivation(nn.Module):
                 self.functional = nn.Identity()
 
             case _:
-                raise ValueError(f'activation function {activation} is unknown.')
+                raise ValueError(f"activation function {activation} is unknown.")
 
     def forward(
         self,
@@ -216,9 +212,9 @@ class DoubleConv(nn.Module):
         intermediate_size: int,
         output_size: int,
         kernel_size: tuple[int] = (3, 3),
-        activation: list[str] = 'ReLU',
+        activation: list[str] = "ReLU",
         padding: int = 1,
-        stride: list[int] = [1,1],
+        stride: list[int] = [1, 1],
         bias: bool = False,
         device: str = None,
         dtype=torch.complex64,
@@ -266,7 +262,7 @@ class DoubleConv(nn.Module):
                 bias=bias,
                 activation=activation[0],
                 device=device,
-                dtype=dtype
+                dtype=dtype,
             ),
             ConvLayer(
                 in_channels=intermediate_size,
@@ -277,8 +273,8 @@ class DoubleConv(nn.Module):
                 bias=bias,
                 activation=activation[1],
                 device=device,
-                dtype=dtype
-            )
+                dtype=dtype,
+            ),
         )
 
     def forward(

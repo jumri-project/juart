@@ -130,7 +130,7 @@ class DataConsistency(nn.Module):
         dtype=torch.complex64,
         verbose: bool = False,
     ):
-        '''
+        """
         Initializes a DataConsistency object which is used for neural networks as dc term.
         The usage of the dc term is to push the result closer to the original image, so
         we dont lose track of it.
@@ -147,7 +147,7 @@ class DataConsistency(nn.Module):
         device: str, optional
             defines the device on which the dc term should be computed on.
             (default is None, which uses the current device)
-        '''
+        """
         super().__init__()
 
         self.toep_ob = ToeplitzOperator(
@@ -179,7 +179,6 @@ class DataConsistency(nn.Module):
         kspace_mask: torch.Tensor = None,
         sensitivity_maps: torch.Tensor = None,
     ):
-
         images_regridded = images_regridded.to(self.device)
         kspace_trajectory = kspace_trajectory.to(self.device)
         if kspace_mask is not None:
@@ -201,7 +200,6 @@ class DataConsistency(nn.Module):
         self,
         images: torch.Tensor,
     ) -> torch.Tensor:
-
         images = conj_grad(
             self.toep_ob,
             self.images_regridded + self.lam * images,

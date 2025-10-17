@@ -2,7 +2,6 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-
 from torch.utils.checkpoint import checkpoint
 
 from ..utils.validation import timing_layer, validation_layer
@@ -18,7 +17,7 @@ class ResNetBlocksModule(nn.Module):
         num_of_resblocks=15,
         scale_factor=0,
         device=None,
-        ResNetCheckpoints = False,
+        ResNetCheckpoints=False,
         dtype=torch.complex64,
     ):
         """
@@ -41,7 +40,7 @@ class ResNetBlocksModule(nn.Module):
             defines the kind of activation function (default is "ReLu")
         device : torch.device, optional
             Device on which to perform the computation
-            (default is None, which uses the current device).   
+            (default is None, which uses the current device).
 
         NOTE: This function is under development and may not be fully functional yet.
         """
@@ -69,7 +68,6 @@ class ResNetBlocksModule(nn.Module):
         self,
         images: torch.Tensor,
     ) -> torch.Tensor:
-
         if self.ResNetCheckpoints:
             for i, layer in enumerate(self.layers):
                 images = checkpoint(self.CalcLayer, images, layer, use_reentrant=False)
@@ -85,7 +83,6 @@ class ResNetBlocksModule(nn.Module):
         images: torch.Tensor,
         layer,
     ) -> torch.Tensor:
-
         return images + self.scale_factor * layer(images)
 
 
@@ -100,7 +97,7 @@ class ResNet(nn.Module):
         timing_level=0,
         validation_level=0,
         device=None,
-        ResNetCheckpoints = False,
+        ResNetCheckpoints=False,
         dtype=torch.complex64,
     ):
         """
@@ -123,7 +120,7 @@ class ResNet(nn.Module):
             defines the kind of activation function (default is "ReLu")
         device : torch.device, optional
             Device on which to perform the computation
-            (default is None, which uses the current device).  
+            (default is None, which uses the current device).
 
         NOTE: This function is under development and may not be fully functional yet.
         """
@@ -177,7 +174,6 @@ class ResNet(nn.Module):
         self,
         image: torch.Tensor,  # shape: [nX,nY,nZ,nTI,nTE]
     ) -> torch.Tensor:
-
         image = image.to(self.device)
 
         l1_out = self.layer1(image)

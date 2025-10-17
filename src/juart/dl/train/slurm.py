@@ -1,8 +1,9 @@
 import os
 
 import torch.distributed as dist
-from .train import train_loop_per_worker
+
 from ..utils.parser import options_parser
+from .train import train_loop_per_worker
 
 
 def main():

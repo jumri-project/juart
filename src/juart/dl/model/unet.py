@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+
 from .common import ConvLayer, ConvTransposeLayer, DoubleConv
 
 
@@ -14,7 +15,7 @@ class DownConvBlock(nn.Module):
         device=None,
         dtype=torch.complex64,
     ):
-        '''
+        """
         Initializes a DownConvBlock which is used for the encoding of the unet.
         (downward pass)
 
@@ -32,8 +33,8 @@ class DownConvBlock(nn.Module):
             defines the kind of activation function (default is "ReLu")
         device : torch.device, optional
             Device on which to perform the computation
-            (default is None, which uses the current device).   
-        '''
+            (default is None, which uses the current device).
+        """
         super().__init__()
         self.down = ConvLayer(
             in_channels,
@@ -73,7 +74,7 @@ class UpConvBlock(nn.Module):
         device=None,
         dtype=torch.complex64,
     ):
-        '''
+        """
         Initializes an UpConvBlock which is used for the decoding of the unet.
         (upward pass)
 
@@ -91,8 +92,8 @@ class UpConvBlock(nn.Module):
             defines the kind of activation function (default is "ReLu")
         device : torch.device, optional
             Device on which to perform the computation
-            (default is None, which uses the current device).        
-        '''
+            (default is None, which uses the current device).
+        """
         super().__init__()
         self.up = ConvTransposeLayer(
             in_channels,
@@ -117,7 +118,7 @@ class UpConvBlock(nn.Module):
         images,
         skip,
     ):
-        images = self.up(images, images.shape[0]*2)
+        images = self.up(images, images.shape[0] * 2)
         images = torch.cat([images, skip], dim=1)  # Concatenate skip connection
         images = self.conv(images)
 
@@ -128,13 +129,13 @@ class UNet(nn.Module):
     def __init__(
         self,
         contrasts: int = 1,
-        features: list[int] = [16,32,64],
+        features: list[int] = [16, 32, 64],
         kernel_size: tuple[int] = (3, 3),
-        activation: str = 'ReLU',
+        activation: str = "ReLU",
         device: str = None,
         dtype=torch.complex64,
     ):
-        '''
+        """
         Initializes a UNet as regularizer.
 
         Parameter
@@ -153,7 +154,7 @@ class UNet(nn.Module):
         device : torch.device, optional
             Device on which to perform the computation
             (default is None, which uses the current device).
-        '''
+        """
         super().__init__()
 
         self.kernel_size = kernel_size
@@ -188,11 +189,11 @@ class UNet(nn.Module):
 
         # Down Conv blocks for downsampling
         self.down_convs = nn.ModuleList()
-        for i in range(len(features)-1):
+        for i in range(len(features) - 1):
             self.down_convs.append(
                 DownConvBlock(
                     features[i],
-                    features[i+1],
+                    features[i + 1],
                     activation=activation,
                     kernel_size=kernel_size,
                     device=device,
@@ -212,11 +213,11 @@ class UNet(nn.Module):
         )
 
         # Decoder (Up Path)
-        for i in range(len(features)-1, 0, -1):
+        for i in range(len(features) - 1, 0, -1):
             self.decoder.append(
                 UpConvBlock(
                     features[i],
-                    features[i-1],
+                    features[i - 1],
                     kernel_size=kernel_size,
                     activation=activation,
                     device=device,
@@ -238,7 +239,6 @@ class UNet(nn.Module):
         self,
         images,
     ):
-
         skips = []
 
         # Initial Conv
@@ -263,7 +263,6 @@ class UNet(nn.Module):
         images = self.final_conv(images)
 
         if len(self.kernel_size) == 12:
-
             nTI, nTE = images.shape[-2:]
 
             images = torch.permute(
