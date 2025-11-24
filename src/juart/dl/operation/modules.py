@@ -76,18 +76,20 @@ def training(
             print(f"Rank {dist.get_rank()} - model initialization done -> loss fn initialization")
             dist.barrier()
             # Loss
-            loss = loss_fn(
+            loss, loss_dict = loss_fn(
                 images_reconstructed,
                 images_regridded,
                 kspace_trajectory,
                 kspace_data,
                 kspace_mask_target,
                 sensitivity_maps,
-            )  
+            )
             print(f"Rank {dist.get_rank()} - loss fn initialization done -> compute backward pass")
             dist.barrier() 
             # Backpropagation
-            loss.backward()  
+            print(type(loss))
+            print(loss)
+            loss.backward()
             print(f"Rank {dist.get_rank()} - compute backward pass done -> compute accumulator")
             dist.barrier() 
             # Accumulate gradients
@@ -106,7 +108,7 @@ def training(
         )
 
     #return averaged_losses.tolist(), images_reconstructed
-    return averaged_losses
+    return loss_dict
 
 def validation(
     indices,
