@@ -242,7 +242,7 @@ class KSpaceLoss(nn.Module):
         images_reconstructed,
         kspace_trajectory,
         kspace_data,
-        kspace_mask,
+        kspace_mask, 
         sensitivity_maps,
     ):
         loss = torch.tensor(0, device=self.device, dtype=torch.float32)

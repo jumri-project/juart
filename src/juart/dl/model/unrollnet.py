@@ -9,6 +9,7 @@ from tqdm import tqdm
 from ..utils.validation import timing_layer, validation_layer
 from .dc import DataConsistency
 from .regularizer import Regularizer
+from .filter import FilterClass
 
 
 class ExponentialMovingAverageModel(AveragedModel):
@@ -62,6 +63,8 @@ class UnrolledNet(nn.Module):
         scale_factor: int = 0,
         features=32,
         activation="ReLU",
+        filter_name: str = None,
+        filter_radius: int = 0,
         lamda_start=0.05,
         phase_normalization=False,
         disable_progress_bar=False,
@@ -124,7 +127,7 @@ class UnrolledNet(nn.Module):
         """
         super().__init__()
 
-        axes = ([n for n in range(1, len(kernel_size)+1, 1)])
+        axis = ([n for n in range(1, len(kernel_size)+1, 1)])
         self.pad_to = pad_to
         self.net_structure = regularizer
         self.kernel_size = kernel_size
@@ -150,6 +153,12 @@ class UnrolledNet(nn.Module):
         else:
             dc_device = device
             reg_device = device
+
+        self.filter = FilterClass(
+            filter_name,
+            radius=filter_radius,
+            axis=axis
+        )
 
         self.regularizer = Regularizer(
             shape,
@@ -183,7 +192,7 @@ class UnrolledNet(nn.Module):
             lamda_start=lamda_start,
             timing_level=timing_level - 1,
             validation_level=validation_level - 1,
-            axes=axes,
+            axes=axis,
             device=dc_device,
             dtype=dtype,
         )
@@ -215,6 +224,7 @@ class UnrolledNet(nn.Module):
         for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
             image = checkpoint(self.regularizer, image, use_reentrant=False)
             image = checkpoint(self.dc, image, use_reentrant=False)
+            image = checkpoint(self.filter, image, use_reentrant=False)
 
         if self.phase_normalization:
             image = image * images_phase[..., None, None]
