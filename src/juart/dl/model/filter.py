@@ -16,7 +16,8 @@ class FilterClass(nn.Module):
         self,
         filter_name: str = None,
         radius: int = 0,
-        axis: tuple[int] = (1, 2, 3)
+        axis: tuple[int] = (1, 2, 3),
+        device="cpu"
     ):
         super().__init__()
         FilterList = ["None", "LowPass"]
@@ -27,7 +28,8 @@ class FilterClass(nn.Module):
         elif filter_name == "LowPass":
             self.filter = LowPassFilter(
                 radius=radius,
-                axis=axis
+                axis=axis,
+                device=device
             )
 
         else:
@@ -43,18 +45,23 @@ class LowPassFilter(nn.Module):
     def __init__(
         self,
         radius: int,
-        axis: tuple[int] = (1, 2, 3)
+        axis: tuple[int] = (1, 2, 3),
+        device="cpu"
     ):
         super().__init__()
         self.radius = radius
         self.axis = axis
+        self.device = device
 
         if radius <= 1:
             raise ValueError("Invalid Value for filter_radius")
 
     def forward(self, image):
 
-        FT = fourier_transform_forward(image, self.axis)
+        image = image[None, ..., 0, 0]
+
+        print(image.shape)
+        FT = fourier_transform_forward(image, self.axis).to(self.device)
 
         if len(self.axis) == 3:
             coords = torch.stack(
@@ -63,7 +70,7 @@ class LowPassFilter(nn.Module):
                     torch.arange(FT.shape[0]),
                     torch.arange(FT.shape[0]),
                     indexing='ij'),
-                dim=-1)
+                dim=-1).to(self.device)
 
         elif len(self.axis) == 2:
             coords = torch.stack(
@@ -71,13 +78,14 @@ class LowPassFilter(nn.Module):
                     torch.arange(FT.shape[0]),
                     torch.arange(FT.shape[0]),
                     indexing='ij'),
-                dim=-1)
+                dim=-1).to(self.device)
 
         center = (FT.shape[0]) / 2.0
-        distance = torch.sqrt(torch.sum((coords - center)**2, dim=-1))
+        distance = torch.sqrt(torch.sum((coords - center)**2, dim=-1)).to(self.device)
 
-        mask = (distance <= self.radius).float()
-        low_pass_image = fourier_transform_adjoint(FT * mask, self.axis)
+        mask = (distance <= self.radius).float().to(self.device)
+        low_pass_image = fourier_transform_adjoint(FT * mask, self.axis)[0,:,:,:,None,None].to(self.device)
+        print(low_pass_image.shape)
 
         return low_pass_image
 

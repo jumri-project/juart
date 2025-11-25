@@ -157,7 +157,8 @@ class UnrolledNet(nn.Module):
         self.filter = FilterClass(
             filter_name,
             radius=filter_radius,
-            axis=axis
+            axis=axis,
+            device=device
         )
 
         self.regularizer = Regularizer(
@@ -223,8 +224,8 @@ class UnrolledNet(nn.Module):
 
         for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
             image = checkpoint(self.regularizer, image, use_reentrant=False)
-            image = checkpoint(self.dc, image, use_reentrant=False)
             image = checkpoint(self.filter, image, use_reentrant=False)
+            image = checkpoint(self.dc, image, use_reentrant=False)
 
         if self.phase_normalization:
             image = image * images_phase[..., None, None]
