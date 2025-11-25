@@ -53,39 +53,36 @@ class LowPassFilter(nn.Module):
         self.axis = axis
         self.device = device
 
-        if radius <= 1:
+        if radius < 1:
             raise ValueError("Invalid Value for filter_radius")
 
     def forward(self, image):
 
         image = image[None, ..., 0, 0]
-
-        print(image.shape)
         FT = fourier_transform_forward(image, self.axis).to(self.device)
 
         if len(self.axis) == 3:
             coords = torch.stack(
                 torch.meshgrid(
-                    torch.arange(FT.shape[0]),
-                    torch.arange(FT.shape[0]),
-                    torch.arange(FT.shape[0]),
+                    torch.arange(FT.shape[1]),
+                    torch.arange(FT.shape[2]),
+                    torch.arange(FT.shape[3]),
                     indexing='ij'),
                 dim=-1).to(self.device)
 
         elif len(self.axis) == 2:
             coords = torch.stack(
                 torch.meshgrid(
-                    torch.arange(FT.shape[0]),
-                    torch.arange(FT.shape[0]),
+                    torch.arange(FT.shape[1]),
+                    torch.arange(FT.shape[2]),
                     indexing='ij'),
                 dim=-1).to(self.device)
-
-        center = (FT.shape[0]) / 2.0
+        
+        center = (FT.shape[1]) / 2.0
         distance = torch.sqrt(torch.sum((coords - center)**2, dim=-1)).to(self.device)
 
         mask = (distance <= self.radius).float().to(self.device)
         low_pass_image = fourier_transform_adjoint(FT * mask, self.axis)[0,:,:,:,None,None].to(self.device)
-        print(low_pass_image.shape)
 
         return low_pass_image
 
