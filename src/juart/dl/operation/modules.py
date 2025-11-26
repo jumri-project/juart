@@ -111,7 +111,7 @@ def training(
             )
             dist.barrier()
             # Loss
-            loss = loss_fn(
+            loss, loss_dict = loss_fn(
                 images_reconstructed,
                 images_regridded,
                 kspace_trajectory,
@@ -119,6 +119,7 @@ def training(
                 kspace_mask_target,
                 sensitivity_maps,
             )
+
             print(
                 f"Rank {dist.get_rank()} - loss fn initialization done -> compute backward pass"
             )
@@ -129,6 +130,7 @@ def training(
                 f"Rank {dist.get_rank()} - compute backward pass done -> compute accumulator"
             )
             dist.barrier()
+
             # Accumulate gradients
             accumulator.accumulate()
 
@@ -144,8 +146,8 @@ def training(
             torch.tensor(losses), group=group, device=device
         )
 
-    # return averaged_losses.tolist(), images_reconstructed
-    return averaged_losses
+    #return averaged_losses.tolist(), images_reconstructed
+    return loss_dict
 
 
 def validation(

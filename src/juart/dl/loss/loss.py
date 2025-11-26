@@ -242,7 +242,7 @@ class KSpaceLoss(nn.Module):
         images_reconstructed,
         kspace_trajectory,
         kspace_data,
-        kspace_mask,
+        kspace_mask, 
         sensitivity_maps,
     ):
         loss = torch.tensor(0, device=self.device, dtype=torch.float32)
@@ -677,4 +677,17 @@ class JointLoss(nn.Module):
             )
         )
 
-        return loss_kspace + loss_ispace + loss_wavelet + loss_hankel + loss_casorati
+        print(f"loss-type{type(loss_kspace)}, loss shape: {loss_kspace.shape}")
+        
+        loss_dict = {
+            "loss_kspace" : torch.Tensor([loss_kspace]).to(self.device),
+            "loss_ispace" : torch.Tensor([loss_ispace]).to(self.device),
+            "loss_wavelet" : torch.Tensor([loss_wavelet]).to(self.device),
+            "loss_hankel" : torch.Tensor([loss_hankel]).to(self.device),
+            "loss_casorati" : torch.Tensor([loss_casorati]).to(self.device),
+            "loss_sum" : torch.Tensor([loss_kspace+loss_ispace+loss_wavelet+loss_hankel+loss_casorati]).to(self.device)
+        }
+        
+        loss = loss_kspace+loss_ispace+loss_wavelet+loss_hankel+loss_casorati
+
+        return loss, loss_dict
