@@ -141,7 +141,6 @@ class UnrolledNet(nn.Module):
         self.validation_level = validation_level
 
         nX, nY, nZ, nTI, nTE = shape
-        contrasts = nTI * nTE
 
         if type(device) == list:
             if len(device) > 1:

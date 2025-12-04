@@ -3,6 +3,63 @@ import numpy as np
 from ipywidgets import interactive, widgets
 
 
+
+class InteractiveFunctionPlotter:
+    def __init__(
+        self,
+        x: list,
+        y: list,
+        start_intslider: float = None,
+        end_intslider: float = None,
+        step_intslider: float = None,
+        title: str = None,
+        x_label: str = None,
+        y_label: str = None,
+        x_lim: list[float] = None,
+        y_lim: list[float] = None,
+        figsize: list[float] = None,
+    ):
+        fig, ax = plt.subplots(1, 1)
+        self.x = x
+        self.y = y
+        self.start_intslider = start_intslider
+        self.end_intslider = end_intslider
+        self.step_intslider = step_intslider
+        self.title = title
+        self.x_label = x_label
+        self.y_label = y_label
+        self.x_lim = x_lim
+        self.y_lim = y_lim
+        self.figsize = figsize
+
+        fig.figure(figsize=figsize)
+        ax.set_title(title)
+        ax.set_ylabel(y_label)
+        ax.set_xlabel(x_label)
+
+        if x_lim:
+            ax.set_xlim(x_lim)
+
+        if y_lim:
+            ax.set_ylim(y_lim)
+
+        self.interactive = interactive(
+            self.show,
+            z=widgets.IntSlider(
+                min=1,
+                max=self.data[0].shape[2],
+                value=self.data[0].shape[2] // 2,
+                description=description,
+            ),
+        )
+
+    def show(self, z):
+
+        for i, data in enumerate(self.data):
+            self.ims[i].set_data(data[:, :, z - 1])
+
+        self.fig.canvas.flush_events()
+
 class InteractiveMultiPlotter3D:
     def __init__(
         self,
