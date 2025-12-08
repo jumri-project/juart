@@ -50,8 +50,8 @@ def sake_espirit(
 
     NAcl = 32
     scale = 1e-4
-    NImx, NImy, ISet_coil, IEco_coil = 256, 256, slice(1, 2), slice(0, 1)
-    # NImx, NImy, ISet_coil, IEco_coil = 256, 256, slice(15, 19), slice(0, 1)
+    # NImx, NImy, ISet_coil, IEco_coil = 256, 256, slice(1, 2), slice(0, 1)
+    NImx, NImy, ISet_coil, IEco_coil = 256, 256, slice(15, 19), slice(0, 1)
     NCha, NLin, NCol, NPar, NSli, NSet, NEco = kdata.shape
 
     with threadpool_limits(limits=1, user_api="blas"):

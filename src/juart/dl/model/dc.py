@@ -101,9 +101,7 @@ class ToeplitzOperator(nn.Module):
 
         for sensitivity_maps_set in sensitivity_maps:
             v = images
-
             v = v * sensitivity_maps_set[..., None, None]
-
             v = apply_transfer_function(
                 v,
                 self.kernel,
@@ -132,6 +130,24 @@ class DataConsistency(nn.Module):
         dtype=torch.complex64,
         verbose: bool = False,
     ):
+        """
+        Initializes a DataConsistency object which is used for neural networks as dc term.
+        The usage of the dc term is to push the result closer to the original image, so
+        we dont lose track of it.
+
+        Parameter
+        ---------
+        shape: tuple[int]
+            defines the shape of the image that should be reconstructed.
+        axes: tuple[int], optional
+            Gives the dc term the information if the reconstruction is 2D or 3D.
+            (default is (1,2))
+        niter: int, optional
+            defines the number of iterations in the dc term (default is 10).
+        device: str, optional
+            defines the device on which the dc term should be computed on.
+            (default is None, which uses the current device)
+        """
         super().__init__()
 
         self.toep_ob = ToeplitzOperator(
@@ -184,8 +200,6 @@ class DataConsistency(nn.Module):
         self,
         images: torch.Tensor,
     ) -> torch.Tensor:
-        images = images.to(self.device)
-
         images = conj_grad(
             self.toep_ob,
             self.images_regridded + self.lam * images,

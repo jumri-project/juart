@@ -250,6 +250,9 @@ def nonuniform_fourier_transform_forward(
     # Flatten R, P1, P2 dim to match 1D/2D/3D finufft
     x = x.squeeze(dim=(-1, -2, -3))
 
+    k = k.cpu().contiguous()
+    x = x.cpu().contiguous()
+    
     y = torch.vmap(
         partial(
             finufft_type2,
@@ -260,6 +263,8 @@ def nonuniform_fourier_transform_forward(
         in_dims=0,
     )(k.contiguous(), x.contiguous())
 
+    y = y.to(device)
+    
     y /= norm
 
     # Reshape flattened additional axes
@@ -397,6 +402,9 @@ def nonuniform_fourier_transform_adjoint(
     x = x.permute(1, 2, 0)
     k = k.permute(2, 0, 1)
 
+    k = k.cpu().contiguous()
+    x = x.cpu().contiguous()
+
     y = torch.vmap(
         partial(
             finufft_type1,
@@ -408,6 +416,8 @@ def nonuniform_fourier_transform_adjoint(
         in_dims=0,
     )(k.contiguous(), x.contiguous())
 
+    y = y.to(device)
+    
     y /= norm
 
     # Ensure y has nx ny nz dim

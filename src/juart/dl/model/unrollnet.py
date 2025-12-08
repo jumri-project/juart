@@ -10,7 +10,8 @@ from tqdm import tqdm
 
 from ..utils.validation import timing_layer, validation_layer
 from .dc import DataConsistency
-from .resnet import ResNet
+from .regularizer import Regularizer
+from .filter import FilterClass
 
 
 class ExponentialMovingAverageModel(AveragedModel):
@@ -60,23 +61,27 @@ class UnrolledNet(nn.Module):
         shape,
         CG_Iter=10,
         num_unroll_blocks=10,
-        num_res_blocks=15,
-        features=128,
-        weight_standardization=False,
-        spectral_normalization=False,
+        num_of_resblocks=15,
+        scale_factor: int = 0,
+        features=32,
         activation="ReLU",
+        filter_name: str = None,
+        filter_radius: int = 0,
         lamda_start=0.05,
         phase_normalization=False,
         disable_progress_bar=False,
+        pad_to: int = 0,
         timing_level=0,
         validation_level=0,
         kernel_size: Tuple[int] = (3, 3),
-        axes: Tuple[int] = (1, 2),
+        regularizer="ResNet",
         device=None,
+        Checkpoints: bool = False,
         dtype=torch.complex64,
     ):
         """
-        Initializes an UnrollNet as a neural Network with a number of ResNet Layers (ConvLayers) and a data consistency layer.
+        Initializes an UnrollNet as a neural Network existing out of a regularizer
+        and a data consistency layer.
 
         Parameters
         ----------
@@ -87,70 +92,112 @@ class UnrolledNet(nn.Module):
         num_unroll_blocks : int, optional
             Number of iterations in the loop of data consistency term and regularization
             term (default is 10).
-        num_res_blocks : int, optional
+        num_of_res_blocks : int, optional
             Number of ResNetBlocks that should be added to the second layer of the
             ResNet (default is 15).
         features : int, optional
             Number of the features of the neural network (default is 128).
-        weight_standardization : bool, optional
-            Activates the weight standardization that sets the mean of the weights to 0
-            and their deviation to 1(default is False).
-        spectral_normalization: bool, optional
-            Activates the spectral normalization (default is False).
+        activation: str, optional
+            defines the kind of activation function (default is "ReLu")
         phase_normalization: bool, optional
             normalizes the signals phase (default is False).
         disable_progress_bar: bool, optional
             Disable the progress bar output (default is False).
-        axes: tuple[int], optional
-            Defines the dimension of the model (default is (1,2) for 2D; Change to
-            (1,2,3) for 3D)
-        activation: str, optional
-            defines the kind of activation function (default is "ReLu")
         kernel_size: Tuple[int], optional
-            changes the size of the kernel used in the convolutional layers
-            (default is (3,3))
-        device : torch.device, optional
+            changes the size of the kernel used in the convolutional layers and  its length
+            decides whether all operations should be 2D or 3D. (default is (3,3))
+        regularizer: str, optional
+            decides which regularizer should be used. For now there are ResNet and UNet
+            (default is ResNet).
+        pad_to: int, optional
+            provides the ability to pad the input image to the shape (pad_to,pad_to,1) or
+            (pad_to,pad_to,pad_to) depending on the length of the kernel_size. Originally
+            used for the UNet and its dependency on the shape of 2^n. If pad_to = 0 and
+            UNet is used than the shape will be padded to the next 2^n shape.
+            (default is 0)
+        device : str, optional
             Device on which to perform the computation
             (default is None, which uses the current device).
+            It is also possible to give a list of strings. The first
+            item is the DataConsistency device and the second one is
+            the device used for the regularizer.
+        Checkpoints: bool, optional
+            If true then checkpoints will be added in the regularizer, providing lower memory
+            usage to the cost of higher computing time (default is False).
 
         NOTE: This function is under development and may not be fully functional yet.
         """
         super().__init__()
 
-        nX, nY, nZ, nTI, nTE = shape
-        contrasts = nTI * nTE
-        dim = len(axes)
+        axis = ([n for n in range(1, len(kernel_size)+1, 1)])
 
-        self.regularizer = ResNet(
-            contrasts=contrasts,
+        self.pad_to = pad_to
+        self.net_structure = regularizer
+        self.kernel_size = kernel_size
+        self.phase_normalization = phase_normalization
+        self.num_unroll_blocks = num_unroll_blocks
+        self.disable_progress_bar = disable_progress_bar
+        self.timing_level = timing_level
+        self.validation_level = validation_level
+
+        nX, nY, nZ, nTI, nTE = shape
+
+        if type(device) == list:
+            if len(device) > 1:
+                dc_device = device[0]
+                resnet_device = device[1]
+
+            else:
+                dc_device = device[0]
+                resnet_device = device[0]
+
+        else:
+            dc_device = device
+            reg_device = device
+
+        self.filter = FilterClass(
+            filter_name,
+            radius=filter_radius,
+            axis=axis,
+            device=device
+        )
+
+        self.regularizer = Regularizer(
+            shape,
+            regularizer=regularizer,
             features=features,
-            num_of_resblocks=num_res_blocks,
-            weight_standardization=weight_standardization,
-            spectral_normalization=spectral_normalization,
+            scale_factor=scale_factor,
             activation=activation,
             kernel_size=kernel_size,
-            timing_level=timing_level - 1,
-            validation_level=validation_level - 1,
-            dim=dim,
-            device=device,
+            num_of_resblocks=num_of_resblocks,
+            Checkpoints=Checkpoints,
+            timing_level=timing_level,
+            validation_level=validation_level,
+            device=reg_device,
             dtype=dtype,
         )
+
+        if regularizer == "UNet":
+            corr = int(2 ** torch.ceil(torch.log2(torch.Tensor([shape[0]]))).item())
+            shape = (corr, corr, corr, shape[3], shape[4])
+
+            if pad_to != 0:
+                if len(kernel_size) == 2:
+                    shape = (pad_to, pad_to, shape[2], shape[3], shape[4])
+
+                elif len(kernel_size) == 3:
+                    shape = (pad_to, pad_to, pad_to, shape[3], shape[4])
+
         self.dc = DataConsistency(
             shape,
             niter=CG_Iter,
             lamda_start=lamda_start,
             timing_level=timing_level - 1,
             validation_level=validation_level - 1,
-            axes=axes,
-            device=device,
+            axes=axis,
+            device=dc_device,
             dtype=dtype,
         )
-        self.num_unroll_blocks = num_unroll_blocks
-        self.phase_normalization = phase_normalization
-        self.disable_progress_bar = disable_progress_bar
-        self.timing_level = timing_level
-        self.validation_level = validation_level
-        self.device = device
 
     @timing_layer
     @validation_layer
@@ -173,16 +220,17 @@ class UnrolledNet(nn.Module):
             sensitivity_maps=sensitivity_maps,
         )
 
-        images = images_regridded.clone().detach()
+        image = images_regridded.clone().detach()
 
         for _ in tqdm(range(self.num_unroll_blocks), disable=self.disable_progress_bar):
-            images = checkpoint(self.regularizer, images, use_reentrant=False)
-            images = checkpoint(self.dc, images, use_reentrant=False)
+            image = checkpoint(self.regularizer, image, use_reentrant=False)
+            image = checkpoint(self.filter, image, use_reentrant=False)
+            image = checkpoint(self.dc, image, use_reentrant=False)
 
         if self.phase_normalization:
-            images = images * images_phase[..., None, None]
+            image = image * images_phase[..., None, None]
 
-        return images
+        return image
 
 
 class SingleContrastUnrolledNet(nn.Module):
@@ -191,17 +239,18 @@ class SingleContrastUnrolledNet(nn.Module):
         shape,
         CG_Iter=10,
         num_unroll_blocks=10,
-        num_res_blocks=15,
+        num_of_resblocks=15,
         contrasts=1,
         features=32,
-        weight_standardization=False,
-        spectral_normalization=False,
         activation="ReLU",
         lamda_start=0.05,
         phase_normalization=False,
         disable_progress_bar=False,
+        pad_to: int = 0,
         timing_level=0,
         validation_level=0,
+        kernel_size: Tuple[int] = (3, 3),
+        regularizer="ResNet",
         device=None,
         dtype=torch.complex64,
     ):
@@ -216,22 +265,25 @@ class SingleContrastUnrolledNet(nn.Module):
                     (nX, nY, nZ, 1, 1),
                     CG_Iter=CG_Iter,
                     num_unroll_blocks=num_unroll_blocks,
-                    num_res_blocks=num_res_blocks,
+                    num_of_resblocks=num_of_resblocks,
                     features=features,
-                    weight_standardization=weight_standardization,
-                    spectral_normalization=spectral_normalization,
                     activation=activation,
                     lamda_start=lamda_start,
                     phase_normalization=phase_normalization,
                     disable_progress_bar=True,
                     timing_level=timing_level - 1,
                     validation_level=validation_level - 1,
+                    kernel_size=kernel_size,
+                    regularizer=regularizer,
                     device=device,
                     dtype=dtype,
                 )
                 for _ in range(contrasts)
             ]
         )
+
+        self.pad_to = pad_to
+        self.net_structure = regularizer
 
         self.disable_progress_bar = disable_progress_bar
         self.timing_level = timing_level

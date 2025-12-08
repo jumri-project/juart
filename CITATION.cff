@@ -4,6 +4,8 @@ authors:
   - family-names: Zimmermann
     given-names: Markus
     orcid: https://orcid.org/0000-0003-1273-5218
+  - family-names: Landmeyer
+    given-names: Felix
 title: "Juelich Advanced Image Reconstruction Toolbox (JuART)"
 version: 0.0.1
 identifiers:

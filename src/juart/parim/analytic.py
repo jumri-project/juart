@@ -106,7 +106,7 @@ def cyclic_head_coil(
     num_coils, nx, ny, nz = coil_config
 
     # Initialize the coil sensitivity map as a complex tensor
-    sensitivity_map = torch.zeros(coil_config, dtype=torch.complex128)
+    sensitivity_map = torch.zeros(coil_config, dtype=torch.complex64)
 
     # Generate phase angles for coil positioning
     phase_angles = torch.linspace(0, 2 * torch.pi, num_coils + 1)[:-1] + phase_offset

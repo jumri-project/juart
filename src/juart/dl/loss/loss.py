@@ -217,7 +217,6 @@ def centralized_loss(x, x_reference, order, dim=None, norm=True, group=None):
 class KSpaceLoss(nn.Module):
     def __init__(
         self,
-        shape,
         weights=(0.1, 0.1),
         dim=None,
         normalized_loss=True,
@@ -228,7 +227,6 @@ class KSpaceLoss(nn.Module):
     ):
         super().__init__()
 
-        self.shape = shape
         self.weights = weights
         self.dim = dim
         self.normalized_loss = normalized_loss
@@ -244,7 +242,7 @@ class KSpaceLoss(nn.Module):
         images_reconstructed,
         kspace_trajectory,
         kspace_data,
-        kspace_mask,
+        kspace_mask, 
         sensitivity_maps,
     ):
         loss = torch.tensor(0, device=self.device, dtype=torch.float32)
@@ -565,7 +563,6 @@ class CasoratiLoss(nn.Module):
 class JointLoss(nn.Module):
     def __init__(
         self,
-        shape,
         kernel_size,
         weights_kspace_loss=(0.3, 0.3),
         weights_ispace_loss=(0.15, 0.15),
@@ -585,7 +582,6 @@ class JointLoss(nn.Module):
         super().__init__()
 
         self.kspace_loss = KSpaceLoss(
-            shape,
             weights=weights_kspace_loss,
             dim=dim_kspace_loss,
             normalized_loss=normalized_loss,
@@ -681,4 +677,17 @@ class JointLoss(nn.Module):
             )
         )
 
-        return loss_kspace + loss_ispace + loss_wavelet + loss_hankel + loss_casorati
+        print(f"loss-type{type(loss_kspace)}, loss shape: {loss_kspace.shape}")
+        
+        loss_dict = {
+            "loss_kspace" : torch.Tensor([loss_kspace]).to(self.device),
+            "loss_ispace" : torch.Tensor([loss_ispace]).to(self.device),
+            "loss_wavelet" : torch.Tensor([loss_wavelet]).to(self.device),
+            "loss_hankel" : torch.Tensor([loss_hankel]).to(self.device),
+            "loss_casorati" : torch.Tensor([loss_casorati]).to(self.device),
+            "loss_sum" : torch.Tensor([loss_kspace+loss_ispace+loss_wavelet+loss_hankel+loss_casorati]).to(self.device)
+        }
+        
+        loss = loss_kspace+loss_ispace+loss_wavelet+loss_hankel+loss_casorati
+
+        return loss, loss_dict
