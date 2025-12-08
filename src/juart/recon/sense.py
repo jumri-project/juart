@@ -95,7 +95,7 @@ def cgsense(
         channel_normalize=channel_normalize,
         maxiter=maxiter,
         axes=((1, 2) if num_dim == 2 else (1, 2, 3)),
-        l2_reg=l2_reg,
+        lambda_ridge=l2_reg,
         verbose=verbose,
         callback=callback,
         device=device,
