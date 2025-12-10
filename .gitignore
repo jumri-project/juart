@@ -8,3 +8,6 @@
 **/__pycache__/
 
 **/build/
+*.hdf5
+*.h5
+
