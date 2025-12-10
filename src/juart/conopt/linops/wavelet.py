@@ -43,17 +43,19 @@ class WaveletTransformOperator(LinearOperator):
         nD = (3 * level) + 1
 
         # Calculate wavelet transfer functions for the axes
-        Hx, Gx = wavelet_transfer_functions(
-            wavelet, level, input_shape[axes[0]], device=device
-        )
-        Hy, Gy = wavelet_transfer_functions(
-            wavelet, level, input_shape[axes[1]], device=device
-        )
-
+        H = []
+        G = []
+        for ax in axes:
+            H_ax, G_ax = wavelet_transfer_functions(
+                wavelet, level, input_shape[ax], device=device
+            )
+            H.append(H_ax)
+            G.append(G_ax)
+            
         # Combine the transfer functions for the specified axes
         self.F = wavelet_transfer_functions_nd(
-            (Hx, Hy),
-            (Gx, Gy),
+            tuple(H),
+            tuple(G),
             (nD,) + input_shape,
             axes,
             device=device,

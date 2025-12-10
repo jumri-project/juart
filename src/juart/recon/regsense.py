@@ -51,17 +51,13 @@ class REGSENSE(object):
 
         Parameters
         ----------
-        coil_sensitivities : torch.Tensor
+        coil_sensitivities : torch.Tensor, shape (nC, nX, nY, nZ, nS)
             Coil sensitivity maps used for sensitivity encoding (SENSE).
-        regridded_data : torch.Tensor
-            Regridded k-space data after Fourier and inverse Fourier transformations.
-        transfer_function : torch.Tensor
+        regridded_data : torch.Tensor, shape (1, nX, nY, nZ, nS, ...)
+            Regridded k-space data after inverse Fourier transformations and coil combination.
+        transfer_function : torch.Tensor, shape (1, nX*OS, nY*OS, nZ*OS, nS, ...)
             Transfer function used in the frequency domain, representing the
             encoding operator for the system.
-        shape : tuple of ints
-            Shape of the data in the form (nX, nY, nZ, nS, nTI, nTE), where nX, nY,
-            nZ are spatial dimensions, nS is the number of channels, and nTI, nTE
-            are the number of inversion and echo times, respectively.
         lambda_wavelet : float, optional
             Regularization parameter for the wavelet term to encourage sparsity in
             the wavelet domain (default is 1e-3).
@@ -115,6 +111,8 @@ class REGSENSE(object):
         num_channels = coil_sensitivities.shape[0]
         shape = regridded_data.shape[1:]
 
+        axes = (1, 2, 3) if shape[2] > 1 else (1, 2)
+
         lin_ops = []
         lin_ops_normal = []
         prox_ops = []
@@ -129,14 +127,14 @@ class REGSENSE(object):
         transfer_function_operator = TransferFunctionOperator(
             transfer_function,
             (num_channels,) + shape,
-            axes=(1, 2),
+            axes=axes,
             device=device,
         )
 
         if lambda_wavelet is not None:
             wavelet_operator = WaveletTransformOperator(
                 (1,) + shape,
-                axes=(1, 2),
+                axes=axes,
                 wavelet=wavelet_type,
                 level=wavelet_level,
                 device=device,
@@ -179,8 +177,8 @@ class REGSENSE(object):
         if lambda_casorati is not None:
             casorati_operator = ShiftOperator(
                 casorati_window,  # Shift_number
-                (1, 1),  # Shift size
-                (1, 2),  # Axes
+                (1,) * len(axes),  # Shift size
+                axes,  # Axes
                 (1,) + shape,
                 device=device,
             )
