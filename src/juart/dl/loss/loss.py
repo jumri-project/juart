@@ -676,8 +676,6 @@ class JointLoss(nn.Module):
                 + f"Loss Casorati {loss_casorati.cpu().detach().numpy():.3f}"
             )
         )
-
-        print(f"loss-type{type(loss_kspace)}, loss shape: {loss_kspace.shape}")
         
         loss_dict = {
             "loss_kspace" : torch.Tensor([loss_kspace]).to(self.device),

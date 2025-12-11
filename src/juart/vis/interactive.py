@@ -2,7 +2,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ipywidgets import interactive, widgets
 
+def MAE(
+    d: np.ndarray,
+    d_pred: np.ndarray
+):
 
+    error = np.abs(d_pred - d)
+    error = np.mean(error)
+
+    return error
 
 class InteractiveFunctionPlotter:
     def __init__(
@@ -72,7 +80,8 @@ class InteractiveMultiPlotter3D:
         description: str = "Dimension 3:",
         activate_colorbar: bool = True,
         show_axis: bool = True,
-        compact_plotting: bool = False
+        compact_plotting: bool = False,
+        reference: int = None,
     ):
         self.data = data
         self.vmin = vmin
@@ -80,6 +89,7 @@ class InteractiveMultiPlotter3D:
         self.title = title
         self.cmap = cmap
         self.layout = layout
+        self.reference = reference
 
         self.ims = list()
         if layout[0] * layout[1] < len(data):
@@ -94,6 +104,18 @@ class InteractiveMultiPlotter3D:
         else:
             self.ax = [self.ax]
 
+        if reference is not None:
+            for i in range(len(data)):
+                error = MAE(data[reference], data[i])
+                self.ax[i].text(
+                    1, 0,
+                    np.round(error, 3),
+                    color="white",
+                    fontsize=14,
+                    ha="right", va="bottom",
+                    transform=self.ax[i].transAxes,
+                )
+        
         if compact_plotting:
             plt.subplots_adjust(left=0, right=1, bottom=0.15, top=1, wspace=0, hspace=0)
 

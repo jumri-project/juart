@@ -32,6 +32,8 @@ def conj_grad(
         disable=(not verbose),
     )
 
+    b = b.view(torch.float32).ravel()
+
     for iter in range(niter):
         Ap = A(p)
         pAp = inner_product(p, Ap)
