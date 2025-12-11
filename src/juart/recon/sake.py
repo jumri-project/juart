@@ -33,20 +33,22 @@ class SAKE(object):
     ):
         nC, nX, nY, nZ, nS, nTI, nTE = regridded_data.shape
 
+        spatial_axes = (1, 2, 3) if nZ > 1 else (1, 2)
+
         lin_ops = []
         lin_ops_normal = []
         prox_ops = []
 
         # Define the OversampledTransferFunctionNormalOperator
         transfer_function_operator = TransferFunctionOperator(
-            transfer_function, (nC, nX, nY, nZ, nS, nTI, nTE), axes=(1, 2)
+            transfer_function, (nC, nX, nY, nZ, nS, nTI, nTE), axes=spatial_axes
         )
 
         if lambda_wavelet is not None:
             # Define the wavelet transform operator
             wavelet_operator = WaveletTransformOperator(
                 (nC, nX, nY, nZ, nS, nTI, nTE),
-                axes=(1, 2),
+                axes=spatial_axes,
                 wavelet=wavelet_type,
                 level=wavelet_level,
             )
