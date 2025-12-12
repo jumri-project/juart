@@ -98,7 +98,7 @@ class UpConvBlock(nn.Module):
         self.up = ConvTransposeLayer(
             in_channels,
             out_channels,
-            kernel_size=(4, 4, 4),
+            kernel_size=tuple(4 for _ in range(len(kernel_size))),
             stride=2,
             device=device,
             dtype=dtype,
@@ -156,7 +156,6 @@ class UNet(nn.Module):
             (default is None, which uses the current device).
         """
         super().__init__()
-
         self.kernel_size = kernel_size
         self.device = device
         self.dtype = dtype
@@ -261,49 +260,5 @@ class UNet(nn.Module):
 
         # Final Conv
         images = self.final_conv(images)
-
-        if len(self.kernel_size) == 12:
-            nTI, nTE = images.shape[-2:]
-
-            images = torch.permute(
-                images, (3, 4, 0, 1, 2)
-            )  # switches shape to [nTI, nTE, nX, nY, nZ]
-            images = torch.flatten(
-                images, start_dim=0, end_dim=1
-            )  # switches shape to [nTI*nTE, nX, nY, nZ]
-
-            # ---
-
-            skips = []
-
-            # Initial Conv
-            images = self.init_conv(images)
-
-            # Encoder
-            for i, layer in enumerate(self.encoder):
-                images = layer(images)
-                if i < len(self.encoder) - 1:  # Skip the last layer (bottleneck input)
-                    skips.append(images)
-                    images = self.down_convs[i](images)  # Down Conv for downsampling
-
-            # Bottleneck
-            images = self.bottleneck(images)
-
-            # Decoder
-            skips = skips[::-1]  # Reverse for upsampling
-            for i, layer in enumerate(self.decoder):
-                images = layer(images, skips[i])
-
-            # Final Conv
-            images = self.final_conv(images)
-
-            # ---
-
-            images = torch.unflatten(
-                images, 1, (nTI, nTE)
-            )  # switches shape to [nTI, nTE, nX, nY, nZ]
-            images = torch.permute(
-                images, (2, 3, 4, 0, 1)
-            )  # switches shape to [nX, nY, nZ, nTI, nTE]
 
         return images

@@ -179,7 +179,12 @@ class UnrolledNet(nn.Module):
 
         if regularizer == "UNet":
             corr = int(2 ** torch.ceil(torch.log2(torch.Tensor([shape[0]]))).item())
-            shape = (corr, corr, corr, shape[3], shape[4])
+
+            if len(kernel_size) == 2:
+                shape = (corr,corr,1,shape[3],shape[4])
+
+            elif len(kernel_size) == 3:
+                shape = (corr, corr, corr, shape[3], shape[4])
 
             if pad_to != 0:
                 if len(kernel_size) == 2:
@@ -208,6 +213,7 @@ class UnrolledNet(nn.Module):
         kspace_mask: torch.Tensor = None,
         sensitivity_maps: torch.Tensor = None,
     ) -> torch.Tensor:
+
         if self.phase_normalization:
             images_phase = torch.exp(1j * torch.angle(images_regridded[..., 0, 0]))
             images_regridded = images_regridded / images_phase[..., None, None]

@@ -45,20 +45,44 @@ def training(
                         torch.log2(torch.Tensor([images_regridded.shape[0]]))
                     ).item()
                 )
-                images_regridded = pad_tensor(
-                    images_regridded,
-                    (
-                        corr,
-                        corr,
-                        corr,
-                        images_regridded.shape[3],
-                        images_regridded.shape[4],
-                    ),
-                )
 
-                sensitivity_maps = pad_tensor(
-                    sensitivity_maps, (sensitivity_maps.shape[0], corr, corr, corr)
-                )
+                if kspace_trajectory.shape[0] == 2:
+
+                    images_regridded = pad_tensor(
+                        images_regridded,
+                        (
+                            corr,
+                            corr,
+                            1,
+                            images_regridded.shape[3],
+                            images_regridded.shape[4],
+                        ),
+                    )
+
+                    sensitivity_maps = pad_tensor(sensitivity_maps,
+                                                  (sensitivity_maps.shape[0],
+                                                   corr,
+                                                   corr,
+                                                   1))
+
+                elif kspace_trajectory.shape[0] == 3:
+                    images_regridded = pad_tensor(
+                        images_regridded,
+                        (
+                            corr,
+                            corr,
+                            corr,
+                            images_regridded.shape[3],
+                            images_regridded.shape[4],
+                        ),
+                    )
+
+                    sensitivity_maps = pad_tensor(sensitivity_maps,
+                              (sensitivity_maps.shape[0],
+                               corr,
+                               corr,
+                               1))
+
 
                 if model.pad_to != 0:
                     pad_to = model.pad_to
