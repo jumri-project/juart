@@ -1,4 +1,4 @@
-import numpy as np
+import torch
 
 
 class OffResonanceCorrection:
@@ -8,27 +8,32 @@ class OffResonanceCorrection:
     with time-varying gradients", IEEE, 1991
     """
 
-    def __init__(
-        self, B0_map: np.ndarray, num_seg: int, num_samples: int, dwell: float
-    ):
+    def __init__(self, B0_map: torch.Tensor, num_seg: int, timestamps: torch.Tensor):
         """Initialize the OffResonanceCorrection class.
 
         Parameters
         ----------
-        B0_map : np.ndarray, (1, Nx, Ny, Nz)
-            B0 field map with 1 channel.
+        B0_map : torch.Tensor, (1, Nx, Ny, Nz)
+            B0 field map in Hz.
         num_seg : int
             Number of time segments to use for the reconstruction.
-        num_samples : int
-            Number of samples in the readout.
-        dwell : float
-            Dwell time of readout in seconds.
+        timestamps : torch.Tensor, (N,)
+            Timestamps corresponding to the k-space samples, in seconds.
+            Should have the same dwell time between samples.
         """
         self.B0_map = B0_map
         self.num_seg = num_seg
-        self.num_samples = num_samples
-        self.window_width = num_samples / (num_seg - 1)
-        self.dwell = dwell
+        self.timestamps = timestamps
+        self.num_samples = len(timestamps)
+        if self.num_samples < 2:
+            raise ValueError(
+                "At least two timestamps are required to calculate dwell time."
+            )
+
+        self.window_width = self.num_samples / (num_seg - 1)
+
+        tmp = torch.sort(self.timestamps)[0]  # Ensure timestamps are sorted
+        self.dwell = tmp[1] - tmp[0]
 
     def get_signal_weights(self, n_seg: int):
         """Return the weights in for kspace signal for the given segment `n_seg'.
@@ -40,28 +45,28 @@ class OffResonanceCorrection:
 
         Returns
         -------
-        weights : np.ndarray, (1, `num_samples`)
+        weights : torch.Tensor, (1, `num_samples`)
             Weights for kspace samples for the given segment number
             `n_seg` with 1 channel and N=`num_samples` samples.
         """
-        t = np.arange(self.num_samples)
+        t0 = self.window_width * n_seg * self.dwell
 
-        t0 = self.window_width * n_seg
+        weights = 0.5 + 0.5 * torch.cos(
+            torch.pi * (self.timestamps - t0) / (self.window_width * self.dwell)
+        )
 
-        weights = 0.5 + 0.5 * np.cos(np.pi * (t - t0) / self.window_width)
+        upper_bound = t0 + self.window_width * self.dwell
+        lower_bound = t0 - self.window_width * self.dwell
 
-        upper_bound = t0 + self.window_width
-        lower_bound = t0 - self.window_width
-
-        weights[t < lower_bound] = 0
-        weights[t > upper_bound] = 0
+        weights[self.timestamps < lower_bound] = 0
+        weights[self.timestamps > upper_bound] = 0
 
         # Add channel dimension
-        weights = weights[np.newaxis, :]
+        weights = weights.unsqueeze(0)
 
         return weights
 
-    def get_img_phase(self, n_seg: int) -> np.ndarray:
+    def get_img_phase(self, n_seg: int) -> torch.Tensor:
         """Get the additional phase in image space
         for the given segment and slice of the B0 map.
 
@@ -72,11 +77,11 @@ class OffResonanceCorrection:
 
         Returns
         -------
-        np.ndarray, (1, Nx, Ny, Nz))
+        torch.Tensor, (1, Nx, Ny, Nz)
             Phase for the given segment of the B0 map.
         """
 
         t0 = self.window_width * n_seg * self.dwell
-        phase = np.exp(1j * 2 * np.pi * self.B0_map * t0)
+        phase = torch.exp(1j * 2 * torch.pi * self.B0_map * t0)
 
         return phase
