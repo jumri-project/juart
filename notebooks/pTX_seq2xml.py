@@ -13,8 +13,14 @@ except ImportError:
     print("running with Python's xml.etree.ElementTree")
 
 import h5py
+import os
 import numpy as np
 from math import pi
+
+# Links:
+# https://onlinelibrary.wiley.com/doi/full/10.1002/mrm.30601        # Paper from T. Roos
+# https://github.com/Roosted7/ptx-pulseq                            # github repo refernced in the paper
+# https://openmr.nl/                                                # Some examples for the Philips scanner
 
 
 # Notes
@@ -38,7 +44,7 @@ m2mm = 1000 # convert m to mm
 rad2deg = 180/pi
 freq_const = 2 * pi / 1000 # From Hz to rad/ms
 
-def seq2xml(seq, seq_name, out_folder):
+def ptx_seq2xml(seq, seq_name, out_folder):
     """
     # Takes a Pulseq sequence and converts it into .xml format for JEMRIS
     # All RF and gradient shapes are stored as .h5 files
@@ -74,7 +80,7 @@ def seq2xml(seq, seq_name, out_folder):
     C0 = ET.SubElement(root, "ConcatSequence")
 
     # Use helper functions to save all RF and only arbitrary gradient info
-    rf_shapes_path_dict = save_rf_library_info(seq, out_folder)
+    rf_shapes_path_dict, NRFChannels = save_rf_library_info(seq, out_folder)
     grad_shapes_path_dict = save_grad_library_info(seq, out_folder)
     #print(grad_shapes_path_dict)
     #///////////////////////////////////////////////////////////////////////////
@@ -104,20 +110,29 @@ def seq2xml(seq, seq_name, out_folder):
             # Case of RF pulse
             if key == 'rf':
                 rf = blk['rf']
-                if(rf != None):                                                     # Added: JF
-                    rf_atom = ET.SubElement(C_block, "EXTERNALRFPULSE")
+                if(rf != None):  
+                    for ch in range(NRFChannels):                                                   # Added: JF
+                        rf_atom = ET.SubElement(C_block, "EXTERNALRFPULSE")
 
-                    rf_atom.set("Name", f'R{rf_name_ind}')
-                    rf_name_ind += 1
+                        rf_atom.set("Name", f'R{rf_name_ind}')
+                        rf_name_ind += 1
 
-                    rf_atom.set("InitialDelay", str(rf.delay*sec2ms))
-                    rf_atom.set("InitialPhase", str(rf.phase_offset*rad2deg))
-                    rf_atom.set("Frequency", str(rf.freq_offset*freq_const))
-                    # Find ID of this rf event
-                    rf_id = seq.block_events[block_ind][1]
-                    rf_atom.set("Filename", rf_shapes_path_dict[rf_id])
-                    rf_atom.set("Scale","1")
-                    rf_atom.set("Interpolate", "0") # Do interpolate
+                        rf_atom.set("Channel", str(ch))
+                        rf_atom.set("InitialDelay", str(rf.delay*sec2ms))
+                        rf_atom.set("InitialPhase", str(rf.phase_offset*rad2deg))
+                        rf_atom.set("Frequency", str(rf.freq_offset*freq_const))
+                        # Find ID of this rf event
+                        rf_id = seq.block_events[block_ind][1]
+                        
+                        if NRFChannels > 1:
+                            # add channel number to file name
+                            RFFormFileName = os.path.splitext(rf_shapes_path_dict[rf_id])[0] + '_ch' + str(ch) + '.h5'
+                        else:
+                            RFFormFileName = rf_shapes_path_dict[rf_id]
+                        rf_atom.set("Filename", RFFormFileName)
+
+                        rf_atom.set("Scale","1")
+                        rf_atom.set("Interpolate", "0") # Do interpolate
 
             gnames_map = {'gx':2, 'gy':3, 'gz':4}
             if key in ['gx', 'gy', 'gz']:
@@ -239,8 +254,8 @@ def save_rf_library_info(seq, out_folder):
         # Phase units should be radians.
         # Time is assumed to increase and start at zero.
         # The last time point defines the length of the pulse.
-        file_path_partial = f'rf_{int(rf_id)}.h5'
-        file_path_full = out_folder + '/' + file_path_partial
+        # file_path_partial = f'rf_{int(rf_id)}.h5'
+        # file_path_full = out_folder + '/' + file_path_partial
         # De-compress using inbuilt PyPulseq method
         rf = seq.rf_from_lib_data(seq.rf_library.data[rf_id])
         # Only extract time, magnitude, and phase
@@ -249,24 +264,40 @@ def save_rf_library_info(seq, out_folder):
         magnitude = np.absolute(rf.signal)
         phase = np.angle(rf.signal)
 
-        N = len(magnitude)
-        # Create file
-        f = h5py.File(file_path_full, 'a')
-        if "extpulse" in f.keys():
-            del f["extpulse"]
+        # Get number of channels
+        # If length of times if greater than the number of unique time pints, 
+        # more than one channel exists
+        NChannels = len(times) // len(np.unique(times))
 
-        #f.create_dataset("extpulse", (N,3), dtype='f')
-        f.create_dataset("extpulse",(3,N),dtype='f')
+        for ch in range(NChannels):
+            file_path_partial = f'rf_{int(rf_id)}_ch{int(ch)}.h5'
+            file_path_full = out_folder + '/' + file_path_partial
 
+            times_ch = times[ch*len(times)//NChannels:(ch+1)*len(times)//NChannels]
+            magnitude_ch = np.absolute(rf.signal[ch*len(times_ch):(ch+1)*len(times_ch)])
+            phase_ch = np.angle(rf.signal[ch*len(times_ch):(ch+1)*len(times_ch)])
+            
+            N = len(times_ch)
+            # Create file
+            f = h5py.File(file_path_full, 'a')
+            if "extpulse" in f.keys():
+                del f["extpulse"]
 
-        times = times - times[0]
-        f["extpulse"][0,:] = times*sec2ms#*sec2ms
-        f["extpulse"][1,:] = magnitude*rf_const
-        f["extpulse"][2,:] = phase#"Phase should be radians"
-        f.close()
+            #f.create_dataset("extpulse", (N,3), dtype='f')
+            f.create_dataset("extpulse",(3,N),dtype='f')
+
+            times_ch = times_ch - times_ch[0]
+            f["extpulse"][0,:] = times_ch*sec2ms #*sec2ms
+            f["extpulse"][1,:] = magnitude_ch*rf_const
+            f["extpulse"][2,:] = phase_ch        #"Phase should be radians"
+
+            f.close()
+
+        # we return the file name without channel number for sake of compatibility
+        file_path_partial = f'rf_{int(rf_id)}.h5'
         rf_shapes_path_dict[rf_id] = file_path_partial
 
-    return rf_shapes_path_dict
+    return rf_shapes_path_dict, NChannels
 
 
 # Helper function
@@ -320,8 +351,8 @@ def save_grad_library_info(seq, out_folder):
 if __name__ == '__main__':
     print('')
     seq = Sequence()
-    seq.read('notebooks/gre_NoDI.seq')
-    seq2xml(seq, seq_name='gre_NoDI', out_folder='notebooks/gre_noDI')
+    seq.read('notebooks/gre2d_pTxSingleChan_8Tx.seq')
+    ptx_seq2xml(seq, seq_name='gre2d_pTxSingleChan_8Tx', out_folder='notebooks/gre2d_pTxSingleChan_8Tx')
 #    seq.read('seq_files/spgr_gspoil_N16_Ns1_TE5ms_TR10ms_FA30deg.seq')
     #seq.read('benchmark_seq2xml/gre_jemris.seq')
 #    seq.read('try_seq2xml/spgr_gspoil_N15_Ns1_TE5ms_TR10ms_FA30deg.seq')

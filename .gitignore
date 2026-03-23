@@ -12,4 +12,9 @@ LocalData/
 qrage/
 parameter-estimation/
 notebooks/gre_noDI/
+notebooks/gre_noDI_pTX/
 notebooks/gre_DI/
+notebooks/gre_DI_pTX/
+notebooks/FID/
+notebooks/gre2d_pTxSingleChan_8Tx
+notebooks/CP_test

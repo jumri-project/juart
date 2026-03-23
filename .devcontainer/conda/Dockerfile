@@ -1,5 +1,5 @@
 ARG CUDA_VER=12.8.1
-ARG LINUX_VER=ubuntu22.04
+ARG LINUX_VER=ubuntu24.04
 FROM nvidia/cuda:${CUDA_VER}-base-${LINUX_VER}
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -50,7 +50,6 @@ EOF
 
 
 RUN <<EOF
-# (TODO) A recommendation that comes along with
 # build-essential is required to pip install finufft
 apt-get install -y --no-install-recommends 
 apt-get install -y \
@@ -58,11 +57,36 @@ apt-get install -y \
     ssh \
     libfftw3-dev \
     pkg-config \
-    git
+    git \
+    libxerces-c-dev \
+    libsundials-dev \
+    libginac-dev \
+    ginac-tools \
+    libginac11 \
+    libhdf5-dev \
+    libismrmrd-dev \
+    libboost-all-dev
 apt-get autoremove -y 
 apt-get clean 
-rm -rf /var/lib/apt/lists/*
 EOF
+
+# Install JEMRIS
+RUN <<EOF 
+git clone https://github.com/JEMRIS/jemris.git
+cd jemris
+mkdir build; cd build; cmake -DSKIP_CONDA=1 ../
+make 
+make install
+cd ../..
+rm -rf jemris
+EOF
+
+# Allow execution of mpi as ROOT user
+ENV OMPI_ALLOW_RUN_AS_ROOT=1
+ENV OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 
+
+# Install bart
+RUN apt-get install -y bart
 
 COPY environment.yml /tmp/
 
@@ -71,3 +95,6 @@ RUN mamba env update \
     --file /tmp/environment.yml \
     && \
     mamba clean --all -f -y
+
+# remove install lists
+RUN rm -rf /var/lib/apt/lists/*

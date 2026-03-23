@@ -4,5 +4,8 @@
     "jupyter.jupyterServerType": "local",
     "editor.formatOnSave": true,
     "terminal.integrated.defaultProfile.linux": "bash",
-    "python.defaultInterpreterPath": "/opt/conda/bin/python"
+    "python.defaultInterpreterPath": "/opt/conda/bin/python",
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python-envs.pythonProjects": []
 }
