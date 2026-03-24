@@ -24,3 +24,4 @@ dependencies:
     - joblib
     - pytorch-finufft
     - torch>=2.0.0
+    - lxml
