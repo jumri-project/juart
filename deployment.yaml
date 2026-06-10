@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: DevContainer
+spec:
+  selector:
+    matchLabels:
+      app: DevContainer
+  template:
+    metadata:
+      labels:
+        app: DevContainer
+    spec:
+      containers:
+        - name: DevContainer
+          image: <Image>
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          ports:
+            - containerPort: <Port>

@@ -11,6 +11,7 @@
 LocalData/
 qrage/
 parameter-estimation/
+coil-evaluations/
 notebooks/gre_noDI/
 notebooks/gre_noDI_pTX/
 notebooks/gre_DI/

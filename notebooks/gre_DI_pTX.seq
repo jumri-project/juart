@@ -24924,8 +24924,8 @@ num_samples 8000
 0
 247
 -0.875
--0
--0
+0
+0
 247
 0.5
 0
@@ -25001,4 +25001,4 @@ num_samples 8000
 # It can be reproduced/verified with md5sum if the file trimmed to the position right above [SIGNATURE]
 # The new line character preceding [SIGNATURE] BELONGS to the signature (and needs to be stripped away for recalculating/verification)
 Type md5
-Hash ea93b30908c3e28083292c0493b6c9fe
+Hash 2cb5a9f7defe09aff853f0247d16a086

@@ -25,3 +25,5 @@ dependencies:
     - pytorch-finufft
     - torch>=2.0.0
     - lxml
+    - git+https://github.com/jumri-project/pypulseq.git@devel
+    - MRzeroCore

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qrage"
+version = "0.0.1"
+authors = [{ name = "Markus Zimmermann", email = "m.zimmermann@fz-juelich.de" }]
+maintainers = [{ name = "Markus Zimmermann" }]
+description = "Quantitative Rapid Gradient-Echo Sequence"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.1.3",
+    "pypulseq @ git+https://github.com/inm-4/pypulseq.git#devel"
+]
+
+[project.optional-dependencies]
+
+[project.urls]
+homepage = "https://github.com/inm-4/qrage"
+Issues = "https://github.com/inm-4/qrage/issues"
+# Documentation = ""
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.ruff]
+line-length = 88
+lint.select = ["E", "F", "W", "I", "B", "E501"]
+lint.ignore = []
