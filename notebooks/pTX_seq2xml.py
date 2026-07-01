@@ -397,7 +397,7 @@ def save_grad_library_info(seq, out_folder):
 if __name__ == "__main__":
     print("")
     seq = Sequence()
-    seq.read("notebooks/qrage_pTX.seq")
+    seq.read("notebooks/qrage_pTX_truncated.seq")
     ptx_seq2xml(seq, seq_name="qrage_pTX", out_folder="notebooks/qrage_pTX")
 #    seq.read('seq_files/spgr_gspoil_N16_Ns1_TE5ms_TR10ms_FA30deg.seq')
 # seq.read('benchmark_seq2xml/gre_jemris.seq')
